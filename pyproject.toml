@@ -1,0 +1,63 @@
+[project]
+name = "survey-assist-themes"
+version = "0.1.0"
+description = "Bake in the government consult themeFinder package for response analysis"
+authors = [
+    {name = "Steve Gibbard",email = "steve.gibbard@ons.gov.uk"}
+]
+license = {text = "MIT"}
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "themefinder (>=0.7.3,<0.8.0)",
+    "pandas (>=2.3.3,<3.0.0)",
+    "python-dotenv (>=1.2.1,<2.0.0)",
+    "langchain-google-vertexai",
+]
+
+# Added to temp try vertex-ai with themefinder
+[tool.poetry.dependencies]
+pyarrow = "19.0.1"
+
+[project.urls]
+homepage = "https://github.com/your-org/survey-assist-themes"
+
+[tool.poetry]
+packages = [
+  { include = "survey_assist_themes", from = "src" },
+]
+
+# Dev dependencies
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+pytest-cov = "^5.0.0"
+mypy = "^1.0.0"
+ruff = "^0.6.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+# -----------------------------
+# TOOL CONFIGURATION
+# -----------------------------
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q --cov=survey_assist_themes --cov-report=term-missing"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.12"
+packages = ["survey_assist_themes"]
+strict = true
+ignore_missing_imports = true
+
+[tool.ruff]
+src = ["src", "tests"]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "B", "UP"]
+ignore = []
