@@ -13,6 +13,7 @@ dependencies = [
     "pandas (>=2.3.3,<3.0.0)",
     "python-dotenv (>=1.2.1,<2.0.0)",
     "langchain-google-vertexai",
+    "google-cloud-storage (>=2.18.0,<3.0.0)",
 ]
 
 # Added to temp try vertex-ai with themefinder

@@ -16,13 +16,19 @@ The code is written to be mypy- and ruff-friendly and uses British
 spelling in documentation.
 """
 import asyncio
+import os
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 from dotenv import load_dotenv
 from langchain_google_vertexai import ChatVertexAI
-from src.survey_assist_themes.utils.file_utils import save_themefinder_output_as_json
+from src.survey_assist_themes.utils.file_utils import (
+    load_feedback_csv_from_gcs,
+    make_timestamped_blob_name,
+    save_themefinder_output_as_json,
+    save_themefinder_output_to_gcs,
+)
 from themefinder import find_themes
 
 
@@ -39,10 +45,21 @@ async def run_demo() -> None:
 
     It is intended as a proof of concept, not a production analysis.
     """
-    # Load GOOGLE_CLOUD_PROJECT / GOOGLE_CLOUD_LOCATION from .env, if present.
+    # Load env vars from .env, if present.
     # Authentication is handled via Application Default Credentials (ADC),
     # which you configure with `gcloud auth application-default login`.
     load_dotenv()
+
+    input_bucket = os.getenv("INPUT_BUCKET")
+    output_bucket = os.getenv("OUTPUT_BUCKET")
+    input_file = os.getenv("INPUT_FILE", "input/example_feedback_v2.csv")
+
+    if not input_bucket or not output_bucket:
+        msg = (
+            "Environment variables INPUT_BUCKET and OUTPUT_BUCKET "
+            "must be set in your .env file."
+        )
+        raise RuntimeError(msg)
 
     # Choose your Gemini model. For quick, cheaper runs you might start with
     # gemini-2.5-flash; for heavier reasoning you can switch to gemini-2.5-pro.
@@ -51,23 +68,8 @@ async def run_demo() -> None:
         temperature=0.0,
     )
 
-    # Example survey responses for the PoC.
-    responses_df = pd.DataFrame(
-        {
-            "response_id": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
-            "response": [
-                "No.",
-                "It was easy and quick",
-                "Seemed very short.",
-                "Very in depth and great interface to use. Simple and not complicated.",
-                "Nope - straightforward",
-                "It would have been useful if there was an expandable box when I clicked 'other'",
-                "Poor questions that were unclear and did not suit the job role in question ",
-                "It was clear and easy to understand",
-                "I described my job, industry, and the products my company supplies directly. The questions were relevant and easy to answer. The organisation type question worked well, and selecting 'Some other kind of organisation' accurately represented my private company.",
-                "Provide a reason for this line of questions, this would promote fuller answers."
-            ],
-        }
+    responses_df = load_feedback_csv_from_gcs(bucket_name=input_bucket,
+        file_name=input_file,
     )
 
     question = "Do you have any other feedback about this survey?"
@@ -87,13 +89,19 @@ async def run_demo() -> None:
         system_prompt=system_prompt,
     )
 
-    # For this PoC, simply print the full result. In a real project you may
-    # wish to persist these data or turn them into visualisations.
+    # Print the raw output
     print(result)
 
-    save_themefinder_output_as_json(
+    # Convert to JSON and store locally
+    # save_themefinder_output_as_json(
+    #     output=result,
+    #     filepath=Path("data/themefinder_output.json"),
+    # )
+
+    save_themefinder_output_to_gcs(
         output=result,
-        filepath=Path("data/themefinder_output.json"),
+        bucket_name=output_bucket,
+        destination_blob_name=f"output/{make_timestamped_blob_name()}",
     )
 
 
