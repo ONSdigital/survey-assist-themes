@@ -22,3 +22,6 @@ poetry.lock
 .vscode/
 .idea/
 *.swp
+
+# Data directory
+data/
