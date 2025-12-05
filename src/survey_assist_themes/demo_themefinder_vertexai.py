@@ -53,6 +53,7 @@ async def run_demo() -> None:
     input_bucket = os.getenv("INPUT_BUCKET")
     output_bucket = os.getenv("OUTPUT_BUCKET")
     input_file = os.getenv("INPUT_FILE", "input/example_feedback_v2.csv")
+    eval_question = os.getenv("QUESTION", "Do you have any other feedback about this survey?")
 
     if not input_bucket or not output_bucket:
         msg = (
@@ -72,7 +73,7 @@ async def run_demo() -> None:
         file_name=input_file,
     )
 
-    question = "Do you have any other feedback about this survey?"
+    question = eval_question
     system_prompt = (
         "You are an AI assistant working for a UK government policy team. "
         "You carefully analyse free-text survey responses to identify key "
