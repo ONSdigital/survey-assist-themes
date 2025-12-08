@@ -44,5 +44,3 @@
 
                 - name: Cleanup residue file
                   run: make clean
-    
-    

@@ -38,6 +38,9 @@ tests: ## Run all tests with coverage
 tests-verbose: ## Run all tests with verbose output
 	poetry run pytest -v --cov=survey_assist_themes --cov-report=term-missing
 
+all-tests: ## Run all tests with coverage
+	poetry run pytest --cov=survey_assist_themes --cov-report=term-missing --cov-report=html
+
 install: ## Install the dependencies
 	poetry install --only main --no-root
 
