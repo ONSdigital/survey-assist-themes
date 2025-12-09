@@ -9,8 +9,7 @@ responses so you can confirm that:
   * Gemini 2.5 (Flash or Pro) is reachable
   * ThemeFinder integrates cleanly with your LLM selection
 
-The code is written to be mypy- and ruff-friendly and uses British
-spelling in documentation.
+The code is written to be mypy- and ruff-friendly
 """
 
 from __future__ import annotations
@@ -111,8 +110,7 @@ async def run_demo() -> None:
     logger.info(f"Loading feedback from GCS bucket: {input_bucket}, file: {input_file}")
 
     try:
-        # Choose your Gemini model. For quick, cheaper runs you might start with
-        # gemini-2.5-flash; for heavier reasoning you can switch to gemini-2.5-pro.
+        # Choose your Gemini model.
         llm = ChatVertexAI(
             model="gemini-2.5-flash",
             temperature=0.0,
