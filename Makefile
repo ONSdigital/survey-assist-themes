@@ -39,7 +39,11 @@ tests-verbose: ## Run all tests with verbose output
 	poetry run pytest -v --cov=survey_assist_themes --cov-report=term-missing
 
 all-tests: ## Run all tests with coverage
-	poetry run pytest --cov=survey_assist_themes --cov-report=term-missing --cov-report=html
+	@if [ -d "tests" ] && [ -n "$$(find tests -name '*.py' -type f ! -name '__init__.py' 2>/dev/null)" ]; then \
+		poetry run pytest --cov=survey_assist_themes --cov-report=term-missing --cov-report=html; \
+	else \
+		echo "No tests found, skipping test execution"; \
+	fi
 
 install: ## Install the dependencies
 	poetry install --only main --no-root
