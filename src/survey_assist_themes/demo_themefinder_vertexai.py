@@ -1,7 +1,4 @@
-from __future__ import annotations
-
-"""
-Minimal ThemeFinder proof-of-concept using Gemini on Vertex AI.
+"""Minimal ThemeFinder proof-of-concept using Gemini on Vertex AI.
 
 This module wires ThemeFinder to Google's Gemini models through Vertex AI
 via LangChain's ChatVertexAI integration.
@@ -12,24 +9,69 @@ responses so you can confirm that:
   * Gemini 2.5 (Flash or Pro) is reachable
   * ThemeFinder integrates cleanly with your LLM selection
 
-The code is written to be mypy- and ruff-friendly and uses British
-spelling in documentation.
+The code is written to be mypy- and ruff-friendly
 """
+
+from __future__ import annotations
+
 import asyncio
 import os
-from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 from dotenv import load_dotenv
 from langchain_google_vertexai import ChatVertexAI
-from src.survey_assist_themes.utils.file_utils import (
+from survey_assist_utils.logging import get_logger
+from themefinder import find_themes
+
+from survey_assist_themes.exceptions import (
+    ConfigurationError,
+    GCSOperationError,
+    ThemeFinderError,
+)
+from survey_assist_themes.utils.file_utils import (
     load_feedback_csv_from_gcs,
     make_timestamped_blob_name,
-    save_themefinder_output_as_json,
     save_themefinder_output_to_gcs,
 )
-from themefinder import find_themes
+from survey_assist_themes.utils.retry import async_retry_with_backoff
+
+logger = get_logger(__name__)
+
+
+@async_retry_with_backoff(
+    max_attempts=3,
+    initial_delay=2.0,
+    backoff_factor=2.0,
+    exceptions=(Exception,),
+)
+async def _run_themefinder_with_retry(
+    responses_df: pd.DataFrame,
+    llm: ChatVertexAI,
+    question: str,
+    system_prompt: str,
+) -> dict[str, Any]:
+    """Run ThemeFinder with retry logic for transient failures.
+
+    Args:
+        responses_df: DataFrame containing survey responses.
+        llm: The language model to use for analysis.
+        question: The survey question being evaluated.
+        system_prompt: System prompt for the LLM.
+
+    Returns:
+        ThemeFinder result dictionary.
+
+    Raises:
+        Exception: If ThemeFinder processing fails after all retries.
+    """
+    result = await find_themes(
+        responses_df,
+        llm,
+        question,
+        system_prompt=system_prompt,
+    )
+    return cast(dict[str, Any], result)
 
 
 async def run_demo() -> None:
@@ -39,15 +81,18 @@ async def run_demo() -> None:
 
     * loads environment variables (for project and location settings)
     * initialises a Gemini chat model via Vertex AI and LangChain
-    * constructs a simple pandas DataFrame of survey responses
+    * loads survey responses from GCS
     * calls ThemeFinder's ``find_themes`` pipeline
-    * prints the raw structured result to standard output
+    * saves the structured result to GCS
 
     It is intended as a proof of concept, not a production analysis.
+
+    Raises:
+        ConfigurationError: If required environment variables are missing.
+        GCSOperationError: If GCS operations fail.
+        ThemeFinderError: If ThemeFinder processing fails.
     """
-    # Load env vars from .env, if present.
-    # Authentication is handled via Application Default Credentials (ADC),
-    # which you configure with `gcloud auth application-default login`.
+    logger.info("Starting ThemeFinder pipeline")
     load_dotenv()
 
     input_bucket = os.getenv("INPUT_BUCKET")
@@ -57,21 +102,30 @@ async def run_demo() -> None:
 
     if not input_bucket or not output_bucket:
         msg = (
-            "Environment variables INPUT_BUCKET and OUTPUT_BUCKET "
-            "must be set in your .env file."
+            "Environment variables INPUT_BUCKET and OUTPUT_BUCKET " "must be set in your .env file."
         )
-        raise RuntimeError(msg)
+        logger.error(msg)
+        raise ConfigurationError(msg)
 
-    # Choose your Gemini model. For quick, cheaper runs you might start with
-    # gemini-2.5-flash; for heavier reasoning you can switch to gemini-2.5-pro.
-    llm = ChatVertexAI(
-        model="gemini-2.5-flash",
-        temperature=0.0,
-    )
+    logger.info(f"Loading feedback from GCS bucket: {input_bucket}, file: {input_file}")
 
-    responses_df = load_feedback_csv_from_gcs(bucket_name=input_bucket,
-        file_name=input_file,
-    )
+    try:
+        # Choose your Gemini model.
+        llm = ChatVertexAI(
+            model="gemini-2.5-flash",
+            temperature=0.0,
+        )
+        logger.debug("Initialised ChatVertexAI with model: gemini-2.5-flash")
+
+        responses_df = load_feedback_csv_from_gcs(
+            bucket_name=input_bucket,
+            file_name=input_file,
+        )
+        logger.info(f"Loaded {len(responses_df)} survey responses")
+
+    except Exception as e:
+        logger.error(f"Failed to load feedback from GCS: {e}", exc_info=True)
+        raise GCSOperationError(f"Failed to load feedback from GCS: {e}") from e
 
     question = eval_question
     system_prompt = (
@@ -80,30 +134,38 @@ async def run_demo() -> None:
         "themes, sentiments and concerns raised by respondents."
     )
 
-    # ThemeFinder runs an asynchronous pipeline over the DataFrame using the
-    # provided LLM. The result is a nested, structured dictionary containing
-    # intermediate stages (sentiment, themes, mappings, etc.).
-    result: dict[str, Any] = await find_themes(
-        responses_df,
-        llm,
-        question,
-        system_prompt=system_prompt,
-    )
+    logger.info("Running ThemeFinder analysis")
+    try:
+        # ThemeFinder runs an asynchronous pipeline over the DataFrame using the
+        # provided LLM. The result is a nested, structured dictionary containing
+        # intermediate stages (sentiment, themes, mappings, etc.).
+        # Retry logic handles transient Vertex AI API failures.
+        result: dict[str, Any] = await _run_themefinder_with_retry(
+            responses_df,
+            llm,
+            question,
+            system_prompt,
+        )
+        logger.info("ThemeFinder analysis completed successfully")
+        logger.debug(f"Result contains {len(result)} top-level keys")
 
-    # Print the raw output
-    print(result)
+    except Exception as e:
+        logger.error(f"ThemeFinder processing failed: {e}", exc_info=True)
+        raise ThemeFinderError(f"ThemeFinder processing failed: {e}") from e
 
-    # Convert to JSON and store locally
-    # save_themefinder_output_as_json(
-    #     output=result,
-    #     filepath=Path("data/themefinder_output.json"),
-    # )
+    try:
+        output_path = f"output/{make_timestamped_blob_name()}"
+        logger.info(f"Saving results to GCS bucket: {output_bucket}, path: {output_path}")
+        save_themefinder_output_to_gcs(
+            output=result,
+            bucket_name=output_bucket,
+            destination_blob_name=output_path,
+        )
+        logger.info("Results saved successfully to GCS")
 
-    save_themefinder_output_to_gcs(
-        output=result,
-        bucket_name=output_bucket,
-        destination_blob_name=f"output/{make_timestamped_blob_name()}",
-    )
+    except Exception as e:
+        logger.error(f"Failed to save results to GCS: {e}", exc_info=True)
+        raise GCSOperationError(f"Failed to save results to GCS: {e}") from e
 
 
 def main() -> None:

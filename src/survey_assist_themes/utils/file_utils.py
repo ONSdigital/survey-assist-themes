@@ -1,14 +1,27 @@
+"""Utilities for file operations with Google Cloud Storage and data processing.
+
+This module provides functions for loading CSV files from GCS, transforming
+data for ThemeFinder, and saving ThemeFinder output back to GCS.
+"""
+
 from __future__ import annotations
 
 import json
 import re
 from collections.abc import Mapping, Sequence
-from datetime import datetime, timezone, UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 from google.cloud import storage
+from google.cloud.exceptions import GoogleCloudError
+from survey_assist_utils.logging import get_logger
+
+from survey_assist_themes.exceptions import DataProcessingError, GCSOperationError
+from survey_assist_themes.utils.retry import retry_with_backoff
+
+logger = get_logger(__name__)
 
 
 def themefinder_output_to_serialisable(data: dict[str, Any]) -> dict[str, Any]:
@@ -131,6 +144,12 @@ def _filter_empty_feedback(df: pd.DataFrame, text_col: str) -> pd.DataFrame:
     return cleaned.loc[mask].copy()
 
 
+@retry_with_backoff(
+    max_attempts=3,
+    initial_delay=1.0,
+    backoff_factor=2.0,
+    exceptions=(GoogleCloudError, IOError),
+)
 def load_feedback_csv_from_gcs(
     bucket_name: str,
     file_name: str,
@@ -162,24 +181,28 @@ def load_feedback_csv_from_gcs(
             response ID cannot be normalised to an integer.
     """
     if len(column_headers) != 2:
-        msg = (
-            "Exactly two column headers must be provided: "
-            "an ID column and a feedback column."
-        )
+        msg = "Exactly two column headers must be provided: " "an ID column and a feedback column."
+        logger.error(msg)
         raise ValueError(msg)
 
     id_col, text_col = column_headers
 
-    client = storage.Client()
-    bucket = client.bucket(bucket_name)
-    blob = bucket.blob(file_name)
+    logger.debug(f"Loading CSV from GCS: bucket={bucket_name}, file={file_name}")
+    try:
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(file_name)
 
-    if not blob.exists():
-        raise FileNotFoundError(
-            f"The file '{file_name}' does not exist in bucket '{bucket_name}'."
-        )
+        if not blob.exists():
+            msg = f"The file '{file_name}' does not exist in bucket '{bucket_name}'."
+            logger.error(msg)
+            raise FileNotFoundError(msg)
 
-    csv_bytes = blob.download_as_bytes()
+        csv_bytes = blob.download_as_bytes()
+        logger.debug(f"Downloaded {len(csv_bytes)} bytes from GCS")
+    except GoogleCloudError as e:
+        logger.error(f"GCS operation failed: {e}", exc_info=True)
+        raise GCSOperationError(f"Failed to load file from GCS: {e}") from e
 
     # Read the pipe-delimited CSV. Let pandas infer dtypes so that missing
     # values remain proper NaNs rather than strings.
@@ -190,10 +213,15 @@ def load_feedback_csv_from_gcs(
 
     missing = [col for col in (id_col, text_col) if col not in df.columns]
     if missing:
-        raise ValueError(f"Missing required columns in CSV: {', '.join(missing)}")
+        msg = f"Missing required columns in CSV: {', '.join(missing)}"
+        logger.error(msg)
+        raise DataProcessingError(msg)
+
+    logger.debug(f"CSV loaded with {len(df)} rows, columns: {list(df.columns)}")
 
     # Drop rows without any meaningful feedback.
     df = _filter_empty_feedback(df, text_col=text_col)
+    logger.debug(f"After filtering empty feedback: {len(df)} rows remaining")
 
     # If everything was empty, fail fast with a clear error rather than sending
     # an empty DataFrame into ThemeFinder.
@@ -203,10 +231,15 @@ def load_feedback_csv_from_gcs(
             "The comments question may have been optional and left blank "
             "by all respondents."
         )
-        raise ValueError(msg)
+        logger.error(msg)
+        raise DataProcessingError(msg)
 
     # Normalise the ID column and build the ThemeFinder schema.
-    df["normalised_id"] = df[id_col].astype(str).apply(_normalise_response_id)
+    try:
+        df["normalised_id"] = df[id_col].astype(str).apply(_normalise_response_id)
+    except ValueError as e:
+        logger.error(f"Failed to normalise response IDs: {e}", exc_info=True)
+        raise DataProcessingError(f"Failed to normalise response IDs: {e}") from e
 
     tf_df = pd.DataFrame(
         {
@@ -218,6 +251,12 @@ def load_feedback_csv_from_gcs(
     return tf_df
 
 
+@retry_with_backoff(
+    max_attempts=3,
+    initial_delay=1.0,
+    backoff_factor=2.0,
+    exceptions=(GoogleCloudError, IOError),
+)
 def save_themefinder_output_to_gcs(
     output: Mapping[str, Any],
     *,
@@ -242,22 +281,32 @@ def save_themefinder_output_to_gcs(
         FileNotFoundError: If the bucket does not exist.
         TypeError: If ``output`` is not JSON-serialisable.
     """
-    client = storage.Client()
-    bucket = client.bucket(bucket_name)
+    logger.debug(f"Saving output to GCS: bucket={bucket_name}, " f"blob={destination_blob_name}")
+    try:
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
 
-    if not bucket.exists():
-        msg = f"The bucket '{bucket_name}' does not exist."
-        raise FileNotFoundError(msg)
+        if not bucket.exists():
+            msg = f"The bucket '{bucket_name}' does not exist."
+            logger.error(msg)
+            raise FileNotFoundError(msg)
 
-    blob = bucket.blob(destination_blob_name)
+        blob = bucket.blob(destination_blob_name)
 
-    serialised = themefinder_output_to_serialisable(output)
+        serialised = themefinder_output_to_serialisable(dict(output))
 
-    json_text = json.dumps(serialised, ensure_ascii=False, indent=2)
-    blob.upload_from_string(
-        json_text,
-        content_type="application/json",
-    )
+        json_text = json.dumps(serialised, ensure_ascii=False, indent=2)
+        blob.upload_from_string(
+            json_text,
+            content_type="application/json",
+        )
+        logger.info(
+            f"Successfully saved {len(json_text)} bytes to GCS: "
+            f"{bucket_name}/{destination_blob_name}"
+        )
+    except GoogleCloudError as e:
+        logger.error(f"GCS operation failed: {e}", exc_info=True)
+        raise GCSOperationError(f"Failed to save output to GCS: {e}") from e
 
 
 def make_timestamped_blob_name(prefix: str = "themefinder_output") -> str:
