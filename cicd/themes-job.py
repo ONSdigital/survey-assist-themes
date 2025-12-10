@@ -21,17 +21,22 @@ def process():
         # Output useful information about the processing starting.
     
     print(
-        f"Staging bucket/file details gs://{STAGING_BUCKET}/{STAGING_FILE}"
+        f"Staging bucket/file details gs://{STAGING_BUCKET}/{STAGING_FILE}\n"
         f"Output bucket details g://{OUTPUT_BUCKET}"
     )
 
     # Download the Cloud Storage object
-    bucket = storage_client.bucket(STAGING_BUCKET)
-    blob = bucket.blob(STAGING_FILE)
-
+    staging_bucket = storage_client.bucket(STAGING_BUCKET)
+    staging_file = staging_bucket.blob(STAGING_FILE)
     # Split blog into a list of strings.
-    contents = blob.download_as_string().decode("utf-8")
+    contents = staging_file.download_as_string().decode("utf-8")
     print(contents)
+
+    print("Process ...")
+
+    output_bucket = storage_client.bucket(OUTPUT_BUCKET)
+    output_file = output_bucket.blob(STAGING_FILE)
+    output_file.upload_from_string(contents)
 
     print(
         f"Cloud run job finished.)"
