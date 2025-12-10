@@ -1,0 +1,26 @@
+# In this directory, run the following command to build this builder.
+# $ gcloud builds submit . --config=cloudbuild.yaml
+
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    id: "build-image"
+    args:
+      - "build"
+      - "--tag=europe-west2-docker.pkg.dev/ons-cicd-surveyassist/themes-job/themes-job"
+      - "-f"
+      - "Dockerfile"
+      - "."
+
+  # Docker Push
+  - name: "gcr.io/cloud-builders/docker"
+    id: "push-image"
+    args:
+      [
+        "push",
+        "europe-west2-docker.pkg.dev/ons-cicd-surveyassist/themes-job/themes-job",
+      ]
+
+# set build options
+timeout: 600s
+options:
+  logging: CLOUD_LOGGING_ONLY
