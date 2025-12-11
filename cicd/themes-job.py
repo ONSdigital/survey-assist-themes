@@ -79,11 +79,16 @@ async def run_analysis() -> None:
     # Map Cloud Run Job environment variables to ThemeFinder inputs
     input_bucket = os.environ.get("STAGING_BUCKET") or os.environ.get("INPUT_BUCKET")
     output_bucket = os.environ.get("OUTPUT_BUCKET")
-    input_file = os.environ.get("STAGING_FILE") or os.environ.get("INPUT_FILE", "input/example_feedback_v2.csv")
+    input_file = os.environ.get("STAGING_FILE") or os.environ.get(
+        "INPUT_FILE", "input/example_feedback_v2.csv"
+    )
     eval_question = os.environ.get("QUESTION", "Do you have any other feedback about this survey?")
 
     if not input_bucket or not output_bucket:
-        msg = "Environment variables STAGING_BUCKET (or INPUT_BUCKET) and OUTPUT_BUCKET must be set."
+        msg = (
+            "Environment variables STAGING_BUCKET (or INPUT_BUCKET) "
+            "and OUTPUT_BUCKET must be set."
+        )
         logger.error(msg)
         raise ConfigurationError(msg)
 
