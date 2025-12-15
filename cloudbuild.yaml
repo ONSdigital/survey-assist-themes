@@ -8,8 +8,8 @@ steps:
       - "build"
       - "--tag=europe-west2-docker.pkg.dev/ons-cicd-surveyassist/themes-job/themes-job"
       - "-f"
-      - "cicd/Dockerfile"
-      - ".."
+      - "Dockerfile"
+      - "."
 
   # Docker Push
   - name: "gcr.io/cloud-builders/docker"

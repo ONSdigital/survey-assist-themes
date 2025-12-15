@@ -2,8 +2,8 @@
 FROM python:3.12-slim AS builder
 
 ENV POETRY_VERSION=2.1.1 \
-    POETRY_HOME="/opt/poetry" \
-    PATH="$POETRY_HOME/bin:$PATH" \
+    POETRY_HOME="/opt/poetry"
+ENV PATH="$POETRY_HOME/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
@@ -23,7 +23,8 @@ RUN /opt/poetry/bin/poetry config virtualenvs.create false && \
     rm -rf ~/.cache /root/.cache /tmp/*
 
 COPY src/ ./src/
-COPY cicd/themes-job.py ./themes-job.py
+COPY themes-job.py ./themes-job.py
+ENV PYTHONPATH=.
 ENV PYTHONPATH="/app/src:${PYTHONPATH}"
 
 # Stage 2: Final runtime image
@@ -35,6 +36,7 @@ COPY --from=builder /app /app
 COPY --from=builder /opt/poetry /opt/poetry
 COPY --from=builder /usr/local/lib/python3.12 /usr/local/lib/python3.12
 COPY --from=builder /usr/local/bin /usr/local/bin
+ENV PYTHONPATH=.
 ENV PATH="/opt/poetry/bin:$PATH" \
     PYTHONPATH="/app/src:${PYTHONPATH}"
 
