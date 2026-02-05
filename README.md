@@ -20,9 +20,25 @@ gcloud auth application-default login
 
 ### Input Data
 
-The input data should be in a CSV format with pipe (|) delimiter.  Headings can be specified in code, but defaults are:  "user"|"feedback_comments"
+The input data should be in a CSV format with pipe (|) delimiter.  
 
-There should be two columns, the first is an **int** which uniquely identifies a respondent and the second is a ***string** which is the users feedback for analysis.
+Headings are expected to be set as "user"|"feedback_comments", **csv parsing will fail** otherwise.
+
+There is an expectation that the "user" format is either STPxxxxx or STPxxxx-xxxx (where x is a number).  The code will **fail to parse the CSV otherwise**.
+
+There should be two columns, the user column will be converted to an **int** which uniquely identifies a respondent and the second is a ***string** which is the users feedback for analysis.
+
+Example input data:
+
+```bash
+user|feedback_comments
+STP00821-01|
+STP00561-01|No 
+STP00017-01|All great
+STP12303-01|none
+STP01847-01|
+STP91885-01|Very easy to navigate
+```
 
 ### Question to Evaluate
 
@@ -38,6 +54,7 @@ The following environment variables are supported, it is recommended to use a .e
 export INPUT_BUCKET=<INPUT_BUCKET_NAME>
 export INPUT_FILE=<INPUT_FOLDER>/<INPUT_FILENAME.CSV>
 export OUTPUT_BUCKET=<OUTPUT_BUCKET_NAME>
+export QUESTION=<Question String>
 ```
 
 ## Install
