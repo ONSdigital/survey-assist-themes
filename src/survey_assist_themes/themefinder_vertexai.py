@@ -74,7 +74,7 @@ async def _run_themefinder_with_retry(
     return cast(dict[str, Any], result)
 
 
-async def run_demo() -> None:
+async def run() -> None:
     """Run a minimal ThemeFinder pipeline using Gemini on Vertex AI.
 
     This function:
@@ -169,15 +169,15 @@ async def run_demo() -> None:
 
 
 def main() -> None:
-    """Entry point to run the ThemeFinder demo from the command line.
+    """Entry point to run ThemeFinder from the command line.
 
-    This thin wrapper allows the demo to be executed via::
+    This thin wrapper allows ThemeFinder to be executed via::
 
-        python -m survey_assist_themes.demo_themefinder_vertex
+        python -m survey_assist_themes.themefinder_vertexai
 
     while remaining friendly to static type-checking and linting tools.
     """
-    asyncio.run(run_demo())
+    asyncio.run(run())
 
 
 if __name__ == "__main__":

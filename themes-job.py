@@ -7,7 +7,7 @@ import os
 
 from survey_assist_utils.logging import get_logger
 
-from survey_assist_themes.demo_themefinder_vertexai import run_demo
+from survey_assist_themes.themefinder_vertexai import run
 from survey_assist_themes.exceptions import ConfigurationError
 
 logger = get_logger(__name__)
@@ -17,7 +17,7 @@ async def run_analysis() -> None:
     """Run ThemeFinder analysis pipeline.
 
     Maps Cloud Run Job environment variables to the format expected by
-    run_demo() and delegates to the main ThemeFinder analysis function.
+    run() and delegates to the main ThemeFinder analysis function.
 
     Environment variables:
         STAGING_BUCKET or INPUT_BUCKET: GCS bucket containing input CSV
@@ -31,7 +31,7 @@ async def run_analysis() -> None:
         GCSOperationError: If GCS operations fail.
         ThemeFinderError: If ThemeFinder processing fails.
     """
-    # Map Cloud Run Job environment variables to run_demo() expected format
+    # Map Cloud Run Job environment variables to run() expected format
     input_bucket = os.environ.get("STAGING_BUCKET") or os.environ.get("INPUT_BUCKET")
     output_bucket = os.environ.get("OUTPUT_BUCKET")
     input_file = os.environ.get("STAGING_FILE") or os.environ.get(
@@ -47,14 +47,14 @@ async def run_analysis() -> None:
         logger.error(msg)
         raise ConfigurationError(msg)
 
-    # Set environment variables in the format expected by run_demo()
+    # Set environment variables in the format expected by run()
     os.environ["INPUT_BUCKET"] = input_bucket
     os.environ["OUTPUT_BUCKET"] = output_bucket
     os.environ["INPUT_FILE"] = input_file
     os.environ["QUESTION"] = eval_question
 
     # Delegate to the main ThemeFinder analysis function
-    await run_demo()
+    await run()
 
 
 def main() -> None:

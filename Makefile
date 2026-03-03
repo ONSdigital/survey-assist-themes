@@ -14,7 +14,7 @@ clean: ## Clean the temporary files.
 	rm -rf .coverage
 
 # Make does not like interpreting : in the target name, so we use a variable
-RUN_CMD=poetry run python -m survey_assist_themes.demo_themefinder_vertexai
+RUN_CMD=poetry run python -m survey_assist_themes.themefinder_vertexai
 
 run-themes: ## Run the ThemeFinder application
 	$(RUN_CMD)
