@@ -7,8 +7,8 @@ import os
 
 from survey_assist_utils.logging import get_logger
 
-from survey_assist_themes.themefinder_vertexai import run
 from survey_assist_themes.exceptions import ConfigurationError
+from survey_assist_themes.themefinder_vertexai import run
 
 logger = get_logger(__name__)
 
