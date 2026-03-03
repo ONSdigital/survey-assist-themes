@@ -82,7 +82,7 @@ Check you have the environment variables set appropriately.
 Start the application:
 
 ```bash
-poetry run python -m survey_assist_themes.demo_themefinder_vertexai
+poetry run python -m survey_assist_themes.themefinder_vertexai
 ```
 
 ## Output
