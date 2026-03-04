@@ -122,7 +122,7 @@ async def run() -> None:
             file_name=input_file,
         )
         logger.debug(f"Feedback data loaded with keys: {list(feedback_data.keys())}")
-        responses_df, id_mapping_df = feedback_data["response_df"], feedback_data["id_mapping"]
+        responses_df, id_mapping_df = feedback_data["tf_df"], feedback_data["id_mapping"]
         responses_df = feedback_data["responses_df"]
         logger.info(f"Loaded {len(responses_df)} survey responses")
 

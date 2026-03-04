@@ -251,14 +251,14 @@ def load_feedback_csv_from_gcs(
 
     id_mapping_df = _build_id_mapping(df, original_id_col=id_col)
 
-    response_df = pd.DataFrame(
+    tf_df = pd.DataFrame(
         {
             "response_id": id_mapping_df["response_id"].astype(int),
             "response": df[text_col].astype(str),
         }
     )
 
-    return {"response_df": response_df, "id_mapping": id_mapping_df}
+    return {"tf_df": tf_df, "id_mapping": id_mapping_df}
 
 
 @retry_with_backoff(
