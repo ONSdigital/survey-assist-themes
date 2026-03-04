@@ -81,8 +81,15 @@ def save_themefinder_output_as_json(output: dict[str, Any], filepath: Path) -> N
         json.dump(serialisable, f, indent=2, ensure_ascii=False)
 
 
-def _build_id_mapping(df: pd.DataFrame, original_id_col: str) -> pd.DataFrame:
+def _build_id_mapping(df: pd.DataFrame, *, original_id_col: str) -> pd.DataFrame:
     original_id = df[original_id_col].astype(str).str.strip()
+
+    duplicate_mask = original_id.duplicated(keep=False)
+    if duplicate_mask.any():
+        duplicates = original_id[duplicate_mask].value_counts()
+        num_duplicate_ids = len(duplicates)
+        logger.info("Found %d duplicate original ID(s)", num_duplicate_ids)
+
     response_id = range(1, len(df) + 1)  # 1 index for ThemeFinder compatibility
     codes, _ = pd.factorize(original_id, sort=False)
     participant_key = codes + 1  # 1 index for ThemeFinder compatibility
