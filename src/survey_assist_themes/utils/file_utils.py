@@ -110,6 +110,21 @@ def _normalise_response_id(raw_id: str) -> int:
     return int(match.group(1))
 
 
+def _build_id_mapping(df: pd.DataFrame, original_id_col: str) -> pd.DataFrame:
+    original_id = df[original_id_col].astype(str).str.strip()
+    response_id = range(1, len(df) + 1)  # 1 index for ThemeFinder compatibility
+    codes, _ = pd.factorize(original_id, sort=False)
+    participant_key = codes + 1  # 1 index for ThemeFinder compatibility
+    mapping_df = pd.DataFrame(
+        {
+            "response_id": response_id,
+            "participant_key": participant_key,
+            "original_id": original_id,
+        }
+    )
+    return mapping_df
+
+
 def _filter_empty_feedback(df: pd.DataFrame, text_col: str) -> pd.DataFrame:
     """Return a copy of ``df`` with rows lacking feedback removed.
 
