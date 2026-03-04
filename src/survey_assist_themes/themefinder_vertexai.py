@@ -123,7 +123,6 @@ async def run() -> None:
         )
         logger.debug(f"Feedback data loaded with keys: {list(feedback_data.keys())}")
         responses_df, id_mapping_df = feedback_data["tf_df"], feedback_data["id_mapping"]
-        responses_df = feedback_data["responses_df"]
         logger.info(f"Loaded {len(responses_df)} survey responses")
 
     except Exception as e:
@@ -158,8 +157,8 @@ async def run() -> None:
 
     try:
         output_name, mapping_name = make_timestamped_blob_names()
-        output_path = f"outputs/{output_name}"
-        mapping_path = f"outputs/{mapping_name}"
+        output_path = f"output/{output_name}"
+        mapping_path = f"output/{mapping_name}"
         logger.info(f"Saving results to GCS bucket: {output_bucket}, path: {output_path}")
         save_themefinder_output_to_gcs(
             output=result,
@@ -170,7 +169,7 @@ async def run() -> None:
 
         logger.info(f"Saving ID mapping to GCS bucket: {output_bucket}, path: {mapping_path}")
         save_themefinder_output_to_gcs(
-            output=id_mapping_df,
+            output={"id_mapping": id_mapping_df},
             bucket_name=output_bucket,
             destination_blob_name=mapping_path,
         )

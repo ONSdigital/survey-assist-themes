@@ -7,7 +7,6 @@ data for ThemeFinder, and saving ThemeFinder output back to GCS.
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -80,34 +79,6 @@ def save_themefinder_output_as_json(output: dict[str, Any], filepath: Path) -> N
 
     with filepath.open("w", encoding="utf-8") as f:
         json.dump(serialisable, f, indent=2, ensure_ascii=False)
-
-
-_ID_PATTERN = re.compile(r"^STP(\d+)(?:-\d+)?$")
-
-
-def _normalise_response_id(raw_id: str) -> int:
-    """Normalise an ID of the form 'STP00861-01' into an integer.
-
-    Args:
-        raw_id: The raw response ID string from the CSV.
-
-    Returns:
-        An integer ID suitable for ThemeFinder.
-
-    Raises:
-        ValueError: If the ID does not match the expected pattern.
-    """
-    raw_id = raw_id.strip()
-
-    match = _ID_PATTERN.match(raw_id)
-    if not match:
-        msg = (
-            f"Unable to normalise response ID '{raw_id}'. "
-            "Expected format 'STP<digits>' or 'STP<digits>-<digits>'."
-        )
-        raise ValueError(msg)
-
-    return int(match.group(1))
 
 
 def _build_id_mapping(df: pd.DataFrame, original_id_col: str) -> pd.DataFrame:
