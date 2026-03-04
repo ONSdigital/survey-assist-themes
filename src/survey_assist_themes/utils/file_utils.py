@@ -325,10 +325,11 @@ def make_timestamped_blob_names(
 
     Args:
         output_prefix: The filename prefix to use before the timestamp for the output JSON file.
-        mapping_prefix: The filename prefix to use before the timestamp for the ID mapping JSON file.
+        mapping_prefix: The filename prefix to use before the timestamp for the mapping JSON file.
 
     Returns:
-        A tuple of strings representing the timestamped blob names for the output and ID mapping JSON files.
+        A tuple of strings representing the timestamped blob names
+        for the output and mapping JSON files.
     """
     now = datetime.now(UTC)
     timestamp = now.strftime("%Y%m%d_%H%M%S")
