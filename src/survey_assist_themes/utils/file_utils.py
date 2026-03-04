@@ -82,8 +82,20 @@ def save_themefinder_output_as_json(output: dict[str, Any], filepath: Path) -> N
 
 
 def _build_id_mapping(df: pd.DataFrame, *, original_id_col: str) -> pd.DataFrame:
+    """Maps Original Source ID(s) to integer response IDs and participant keys in a DataFrame.
+
+    Args:
+        df: The original DataFrame loaded from CSV.
+        original_id_col: The name of the column containing original respondent IDs.
+    Returns:
+    A DataFrame with columns:
+        - response_id: Integer IDs suitable for ThemeFinder (1-indexed).
+        - participant_key: Integer keys representing unique participants (1-indexed).
+        - original_id: The original respondent IDs from the CSV, as strings.
+    """
     original_id = df[original_id_col].astype(str).str.strip()
 
+    # Log if there are any duplicate original IDs
     duplicate_mask = original_id.duplicated(keep=False)
     if duplicate_mask.any():
         duplicates = original_id[duplicate_mask].value_counts()
@@ -93,6 +105,7 @@ def _build_id_mapping(df: pd.DataFrame, *, original_id_col: str) -> pd.DataFrame
     response_id = range(1, len(df) + 1)  # 1 index for ThemeFinder compatibility
     codes, _ = pd.factorize(original_id, sort=False)
     participant_key = codes + 1  # 1 index for ThemeFinder compatibility
+
     mapping_df = pd.DataFrame(
         {
             "response_id": response_id,
@@ -308,12 +321,14 @@ def make_timestamped_blob_names(
 
     Example:
         themefinder_output_20251205_142355.json
+        themefinder_id_mapping_20251205_142355.json
 
     Args:
-        prefix: The filename prefix to use before the timestamp.
+        output_prefix: The filename prefix to use before the timestamp for the output JSON file.
+        mapping_prefix: The filename prefix to use before the timestamp for the ID mapping JSON file.
 
     Returns:
-        A string representing the timestamped blob name.
+        A tuple of strings representing the timestamped blob names for the output and ID mapping JSON files.
     """
     now = datetime.now(UTC)
     timestamp = now.strftime("%Y%m%d_%H%M%S")
