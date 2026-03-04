@@ -249,21 +249,16 @@ def load_feedback_csv_from_gcs(
         logger.error(msg)
         raise DataProcessingError(msg)
 
-    # Normalise the ID column and build the ThemeFinder schema.
-    try:
-        df["normalised_id"] = df[id_col].astype(str).apply(_normalise_response_id)
-    except ValueError as e:
-        logger.error(f"Failed to normalise response IDs: {e}", exc_info=True)
-        raise DataProcessingError(f"Failed to normalise response IDs: {e}") from e
+    id_mapping_df = _build_id_mapping(df, original_id_col=id_col)
 
-    tf_df = pd.DataFrame(
+    response_df = pd.DataFrame(
         {
-            "response_id": df["normalised_id"].astype(int),
+            "response_id": id_mapping_df["response_id"].astype(int),
             "response": df[text_col].astype(str),
         }
     )
 
-    return tf_df
+    return {"response_df": response_df, "id_mapping": id_mapping_df}
 
 
 @retry_with_backoff(
@@ -324,7 +319,10 @@ def save_themefinder_output_to_gcs(
         raise GCSOperationError(f"Failed to save output to GCS: {e}") from e
 
 
-def make_timestamped_blob_name(prefix: str = "themefinder_output") -> str:
+def make_timestamped_blob_names(
+    output_prefix: str = "themefinder_output",
+    mapping_prefix: str = "themefinder_id_mapping",
+) -> tuple[str, str]:
     """Return a timestamped blob name for storing JSON outputs in GCS.
 
     The returned string follows the pattern:
@@ -341,4 +339,4 @@ def make_timestamped_blob_name(prefix: str = "themefinder_output") -> str:
     """
     now = datetime.now(UTC)
     timestamp = now.strftime("%Y%m%d_%H%M%S")
-    return f"{prefix}_{timestamp}.json"
+    return (f"{output_prefix}_{timestamp}.json", f"{mapping_prefix}_{timestamp}.json")
