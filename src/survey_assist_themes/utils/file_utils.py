@@ -83,6 +83,8 @@ def save_themefinder_output_as_json(output: dict[str, Any], filepath: Path) -> N
 
 def _build_id_mapping(df: pd.DataFrame, *, original_id_col: str) -> pd.DataFrame:
     """Maps Original Source ID(s) to integer response IDs and participant keys in a DataFrame.
+    Each input row receives a unique response_id, while identical original IDs
+    share the same participant_key.
 
     Args:
         df: The original DataFrame loaded from CSV.
@@ -107,7 +109,7 @@ def _build_id_mapping(df: pd.DataFrame, *, original_id_col: str) -> pd.DataFrame
         num_duplicate_ids = len(duplicates)
         logger.info("Found %d duplicate original ID(s)", num_duplicate_ids)
 
-    response_id = range(1, len(df) + 1)  # 1 index for ThemeFinder compatibility
+    response_id = pd.RangeIndex(start=1, stop=len(df) + 1) # 1 index for ThemeFinder compatibility
     codes, _ = pd.factorize(original_id, sort=False)
     participant_key = codes + 1  # 1 index for ThemeFinder compatibility
 
