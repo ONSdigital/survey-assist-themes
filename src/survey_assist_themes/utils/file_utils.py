@@ -92,10 +92,15 @@ def _build_id_mapping(df: pd.DataFrame, *, original_id_col: str) -> pd.DataFrame
         - response_id: Integer IDs suitable for ThemeFinder (1-indexed).
         - participant_key: Integer keys representing unique participants (1-indexed).
         - original_id: The original respondent IDs from the CSV, as strings.
+    Raises:
+        ValueError: If the ID does not match the expected pattern.
     """
     original_id = df[original_id_col].astype(str).str.strip()
 
-    # Log if there are any duplicate original IDs
+    _validate_ids(original_id, column_name=original_id_col)
+    logger.info("ID(s) have been successfully validated")
+
+    #  Log if there are any duplicate original IDs
     duplicate_mask = original_id.duplicated(keep=False)
     if duplicate_mask.any():
         duplicates = original_id[duplicate_mask].value_counts()
@@ -148,6 +153,21 @@ def _filter_empty_feedback(df: pd.DataFrame, text_col: str) -> pd.DataFrame:
 
     mask = ~(is_missing | is_empty_string | is_literal_nan)
     return cleaned.loc[mask].copy()
+
+
+def _validate_ids(original_id: pd.Series, *, column_name: str) -> None:
+    """
+    Validates that all ID(s) contain only letters, numbers, or hyphens.
+    """
+    logger.debug("Validating ID(s)")
+    valid_mask = original_id.str.fullmatch(r"[A-Za-z0-9-]+")
+    if (~valid_mask).any():
+        invalid_ids = original_id[~valid_mask].unique()
+        msg = (
+            f"Invalid response ID(s) found: {invalid_ids.tolist()}. "
+            "IDs must contain only letters, numbers, or hyphens."
+        )
+        raise ValueError(msg)
 
 
 @retry_with_backoff(
