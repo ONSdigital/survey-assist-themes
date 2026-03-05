@@ -107,9 +107,9 @@ def _build_id_mapping(df: pd.DataFrame, *, original_id_col: str) -> pd.DataFrame
     if duplicate_mask.any():
         duplicates = original_id[duplicate_mask].value_counts()
         num_duplicate_ids = len(duplicates)
-        logger.info("Found %d duplicate original ID(s)", num_duplicate_ids)
+        logger.info(f"Found {num_duplicate_ids} duplicate original ID(s)")
 
-    response_id = pd.RangeIndex(start=1, stop=len(df) + 1) # 1 index for ThemeFinder compatibility
+    response_id = pd.RangeIndex(start=1, stop=len(df) + 1)  # 1 index for ThemeFinder compatibility
     codes, _ = pd.factorize(original_id, sort=False)
     participant_key = codes + 1  # 1 index for ThemeFinder compatibility
 
