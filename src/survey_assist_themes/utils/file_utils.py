@@ -109,7 +109,7 @@ def _build_id_mapping(df: pd.DataFrame, *, original_id_col: str) -> pd.DataFrame
         num_duplicate_ids = len(duplicates)
         logger.info(f"Found {num_duplicate_ids} duplicate original ID(s)")
 
-    response_id = pd.RangeIndex(start=1, stop=len(df) + 1) # 1 index for ThemeFinder compatibility
+    response_id = pd.RangeIndex(start=1, stop=len(df) + 1)  # 1 index for ThemeFinder compatibility
     codes, _ = pd.factorize(original_id, sort=False)
     participant_key = codes + 1  # 1 index for ThemeFinder compatibility
 
@@ -342,7 +342,7 @@ def make_timestamped_blob_names(
 
     Example:
         themefinder_output_20251205_142355.json
-        themefinder_id_mapping_20251205_142355.json
+        themefinder_output_20251205_142355_mapping.json
 
     Args:
         output_prefix: The filename prefix to use before the timestamp for the output JSON file.
