@@ -109,7 +109,7 @@ def _build_id_mapping(df: pd.DataFrame, *, original_id_col: str) -> pd.DataFrame
         num_duplicate_ids = len(duplicates)
         logger.info(f"Found {num_duplicate_ids} duplicate original ID(s)")
 
-    response_id = pd.RangeIndex(start=1, stop=len(df) + 1)  # 1 index for ThemeFinder compatibility
+    response_id = pd.RangeIndex(start=1, stop=len(df) + 1) # 1 index for ThemeFinder compatibility
     codes, _ = pd.factorize(original_id, sort=False)
     participant_key = codes + 1  # 1 index for ThemeFinder compatibility
 
@@ -334,7 +334,6 @@ def save_themefinder_output_to_gcs(
 
 def make_timestamped_blob_names(
     output_prefix: str = "themefinder_output",
-    mapping_prefix: str = "themefinder_id_mapping",
 ) -> tuple[str, str]:
     """Return a timestamped blob name for storing JSON outputs in GCS.
 
@@ -355,4 +354,6 @@ def make_timestamped_blob_names(
     """
     now = datetime.now(UTC)
     timestamp = now.strftime("%Y%m%d_%H%M%S")
-    return (f"{output_prefix}_{timestamp}.json", f"{mapping_prefix}_{timestamp}.json")
+    output_name = f"{output_prefix}_{timestamp}.json"
+    mapping_name = f"{output_prefix}_{timestamp}_mapping.json"
+    return output_name, mapping_name
