@@ -346,7 +346,6 @@ def make_timestamped_blob_names(
 
     Args:
         output_prefix: The filename prefix to use before the timestamp for the output JSON file.
-        mapping_prefix: The filename prefix to use before the timestamp for the mapping JSON file.
 
     Returns:
         A tuple of strings representing the timestamped blob names
