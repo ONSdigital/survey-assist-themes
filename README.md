@@ -156,7 +156,7 @@ The first file is the JSON formatted output from ThemeFinder. And is structured 
         "A",
         "B"
       ]
-    },
+    }],
     ...
     "detailed_responses": [
     {
