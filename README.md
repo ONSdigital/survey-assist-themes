@@ -186,7 +186,7 @@ The second file is a JSON file which records the mapping between Response ID and
 | Field | Description |
 |------|-------------|
 | response_id | Sequential integer assigned to each input row, starting from 1. |
-| original_id | Original Source ID. |
+| original_id | Original Source ID |
 | participant_key | Sequential integer assigned per unique `original_id`. Duplicate original IDs share the same participant_key. |
 
 The file name will match will include the suffix: 
