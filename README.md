@@ -177,6 +177,7 @@ The first file is the JSON formatted output from ThemeFinder. And is structured 
       "response": "I have to think a bit but what can you do. "
     }
   ]
+}
 ```
 
 ### Response ID Mapping File
@@ -189,7 +190,7 @@ The second file is a JSON file which records the mapping between Response ID and
 | original_id | Original Source ID |
 | participant_key | Sequential integer assigned per unique `original_id`. Duplicate original IDs share the same participant_key. |
 
-The file name will match will include the suffix: 
+The file name will match the ThemeFinder Output file but will include the suffix: 
 
 ```
 _id_mapping.json
