@@ -87,9 +87,11 @@ poetry run python -m survey_assist_themes.themefinder_vertexai
 
 ## Output
 
-A JSON structured output will be saved in the destination bucket you specified in the environment variable OUTPUT_BUCKET.
+Two files will be saved in the destination bucket you specified in the environment variable OUTPUT_BUCKET.
 
-The JSON structure is as follows:
+### ThemeFinder Output
+
+The first file is the JSON formatted output from ThemeFinder. And is structured as follows:
 
 ```json
 {
@@ -175,4 +177,47 @@ The JSON structure is as follows:
       "response": "I have to think a bit but what can you do. "
     }
   ]
+```
+
+### Response ID Mapping File
+
+The second file is a JSON file which records the mapping between Response ID and the Original Source ID.
+
+| Field | Description |
+|------|-------------|
+| response_id | Sequential integer assigned to each input row, starting from 1. |
+| original_id | Original Source ID. |
+| participant_key | Sequential integer assigned per unique `original_id`. Duplicate original IDs share the same participant_key. |
+
+The file name will match will include the suffix: 
+
+```
+_id_mapping.json
+```
+
+The structure of the file as follows:
+
+```json
+[
+  {
+    "response_id": 1,
+    "participant_key": 1,
+    "original_id": "STP00001"
+  },
+  {
+    "response_id": 2,
+    "participant_key": 1,
+    "original_id": "STP00001"
+  },
+  {
+    "response_id": 3,
+    "participant_key": 2,
+    "original_id": "STP00002"
+  },
+  {
+    "response_id": 4,
+    "participant_key": 3,
+    "original_id": "STP00003"
+  }
+]
 ```
