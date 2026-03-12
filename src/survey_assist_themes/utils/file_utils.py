@@ -7,7 +7,6 @@ data for ThemeFinder, and saving ThemeFinder output back to GCS.
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -82,32 +81,46 @@ def save_themefinder_output_as_json(output: dict[str, Any], filepath: Path) -> N
         json.dump(serialisable, f, indent=2, ensure_ascii=False)
 
 
-_ID_PATTERN = re.compile(r"^STP(\d+)(?:-\d+)?$")
-
-
-def _normalise_response_id(raw_id: str) -> int:
-    """Normalise an ID of the form 'STP00861-01' into an integer.
+def _build_id_mapping(df: pd.DataFrame, *, original_id_col: str) -> pd.DataFrame:
+    """Maps Original Source ID(s) to integer response IDs and participant keys in a DataFrame.
+    Each input row receives a unique response_id, while identical original IDs
+    share the same participant_key.
 
     Args:
-        raw_id: The raw response ID string from the CSV.
-
+        df: The original DataFrame loaded from CSV.
+        original_id_col: The name of the column containing original respondent IDs.
     Returns:
-        An integer ID suitable for ThemeFinder.
-
+    A DataFrame with columns:
+        - response_id: Integer IDs suitable for ThemeFinder (1-indexed).
+        - participant_key: Integer keys representing unique participants (1-indexed).
+        - original_id: The original respondent IDs from the CSV, as strings.
     Raises:
         ValueError: If the ID does not match the expected pattern.
     """
-    raw_id = raw_id.strip()
+    original_id = df[original_id_col].astype(str).str.strip()
 
-    match = _ID_PATTERN.match(raw_id)
-    if not match:
-        msg = (
-            f"Unable to normalise response ID '{raw_id}'. "
-            "Expected format 'STP<digits>' or 'STP<digits>-<digits>'."
-        )
-        raise ValueError(msg)
+    _validate_ids(original_id, column_name=original_id_col)
+    logger.info("ID(s) have been successfully validated")
 
-    return int(match.group(1))
+    #  Log if there are any duplicate original IDs
+    duplicate_mask = original_id.duplicated(keep=False)
+    if duplicate_mask.any():
+        duplicates = original_id[duplicate_mask].value_counts()
+        num_duplicate_ids = len(duplicates)
+        logger.info(f"Found {num_duplicate_ids} duplicate original ID(s)")
+
+    response_id = pd.RangeIndex(start=1, stop=len(df) + 1)  # 1 index for ThemeFinder compatibility
+    codes, _ = pd.factorize(original_id, sort=False)
+    participant_key = codes + 1  # 1 index for ThemeFinder compatibility
+
+    mapping_df = pd.DataFrame(
+        {
+            "response_id": response_id,
+            "participant_key": participant_key,
+            "original_id": original_id,
+        }
+    )
+    return mapping_df
 
 
 def _filter_empty_feedback(df: pd.DataFrame, text_col: str) -> pd.DataFrame:
@@ -142,6 +155,21 @@ def _filter_empty_feedback(df: pd.DataFrame, text_col: str) -> pd.DataFrame:
 
     mask = ~(is_missing | is_empty_string | is_literal_nan)
     return cleaned.loc[mask].copy()
+
+
+def _validate_ids(original_id: pd.Series, *, column_name: str) -> None:
+    """
+    Validates that all ID(s) contain only letters, numbers, or hyphens.
+    """
+    logger.debug("Validating ID(s)")
+    valid_mask = original_id.str.fullmatch(r"[A-Za-z0-9-]+")
+    if (~valid_mask).any():
+        invalid_ids = original_id[~valid_mask].unique()
+        msg = (
+            f"Invalid response ID(s) found: {invalid_ids.tolist()}. "
+            "IDs must contain only letters, numbers, or hyphens."
+        )
+        raise ValueError(msg)
 
 
 @retry_with_backoff(
@@ -234,21 +262,16 @@ def load_feedback_csv_from_gcs(
         logger.error(msg)
         raise DataProcessingError(msg)
 
-    # Normalise the ID column and build the ThemeFinder schema.
-    try:
-        df["normalised_id"] = df[id_col].astype(str).apply(_normalise_response_id)
-    except ValueError as e:
-        logger.error(f"Failed to normalise response IDs: {e}", exc_info=True)
-        raise DataProcessingError(f"Failed to normalise response IDs: {e}") from e
+    id_mapping_df = _build_id_mapping(df, original_id_col=id_col)
 
     tf_df = pd.DataFrame(
         {
-            "response_id": df["normalised_id"].astype(int),
+            "response_id": id_mapping_df["response_id"].astype(int),
             "response": df[text_col].astype(str),
         }
     )
 
-    return tf_df
+    return {"tf_df": tf_df, "id_mapping": id_mapping_df}
 
 
 @retry_with_backoff(
@@ -309,7 +332,9 @@ def save_themefinder_output_to_gcs(
         raise GCSOperationError(f"Failed to save output to GCS: {e}") from e
 
 
-def make_timestamped_blob_name(prefix: str = "themefinder_output") -> str:
+def make_timestamped_blob_names(
+    output_prefix: str = "themefinder_output",
+) -> tuple[str, str]:
     """Return a timestamped blob name for storing JSON outputs in GCS.
 
     The returned string follows the pattern:
@@ -317,13 +342,17 @@ def make_timestamped_blob_name(prefix: str = "themefinder_output") -> str:
 
     Example:
         themefinder_output_20251205_142355.json
+        themefinder_output_20251205_142355_mapping.json
 
     Args:
-        prefix: The filename prefix to use before the timestamp.
+        output_prefix: The filename prefix to use before the timestamp for the output JSON file.
 
     Returns:
-        A string representing the timestamped blob name.
+        A tuple of strings representing the timestamped blob names
+        for the output and mapping JSON files.
     """
     now = datetime.now(UTC)
     timestamp = now.strftime("%Y%m%d_%H%M%S")
-    return f"{prefix}_{timestamp}.json"
+    output_name = f"{output_prefix}_{timestamp}.json"
+    mapping_name = f"{output_prefix}_{timestamp}_mapping.json"
+    return output_name, mapping_name
