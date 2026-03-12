@@ -82,8 +82,35 @@ async def generate_report(
     input_bucket, blob_name = path.split("/", 1)
 
     result = _load_themefinder_output_from_gcs(input_bucket, blob_name)
-
-    if preprocess:
+ 
+    llm = ChatVertexAI(model="gemini-2.5-flash", temperature=0.2)
+ 
+    if use_document_upload:
+        # uses Gemini's document handling rather than inline JSON in the prompt
+        json_bytes = json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8")
+        b64_json = base64.b64encode(json_bytes).decode("utf-8")
+ 
+        response = await llm.ainvoke([
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=[
+                {
+                    "type": "text",
+                    "text": (
+                        f"Survey question: **{question}**\n\n"
+                        "The ThemeFinder output JSON is attached as a document below. "
+                        "Write a comprehensive report based on this analysis."
+                    ),
+                },
+                {
+                    "type": "media",
+                    "mime_type": "text/plain",
+                    "data": b64_json,
+                },
+            ]),
+        ])
+        prefix = "report_document_upload"
+ 
+    elif preprocess:
         themes = result.get("themes", [])
         mapping = result.get("mapping", [])
 
