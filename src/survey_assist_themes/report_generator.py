@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import os
 from typing import Any
@@ -21,8 +22,26 @@ from google.cloud import storage  # type: ignore[import]
 from survey_assist_themes.exceptions import GCSOperationError
 
 logger = get_logger(__name__)
-
-
+ 
+SYSTEM_PROMPT = (
+    "I have been testing an application with the public which provides AI generated questions, "
+    "only when they are appropriate, into a survey that aims to categorise the type of "
+    "organisation the respondent works for. The application consists of a survey section "
+    "(asks job title, description and organisation description + dynamic questions when required) "
+    "and a feedback section which allowed the respondents to provide \"other feedback\" by "
+    "answering the question: \"Do you have any other feedback about this survey?\""
+    "I have run all of the responses from the public through a library called ThemeFinder - "
+    "https://github.com/i-dot-ai/themefinder/ which maps responses to themes and categorises "
+    "sentiment as well as indicating how detailed the feedback was and therefore how suitable "
+    "for analysis."
+    "Use the ThemeFinder readme and the uploaded json output file to provide a high level summary "
+    "of the themes identified, user sentiment to the application and the level of detail provided "
+    "in the feedback."
+    "This output must be presented in a way that refers back to the input data to give examples "
+    "and is accessible to non-data scientists."
+)
+ 
+ 
 def _load_themefinder_output_from_gcs(bucket_name: str, blob_name: str) -> dict[str, Any]:
 
     try:
@@ -48,8 +67,11 @@ async def generate_report(
     themefinder_output_path: str,
     question: str,
     output_bucket: str,
-    preprocess: bool = True,
+    preprocess: bool = False,
+    use_document_upload: bool = False,
 ) -> None:
+    if preprocess and use_document_upload:
+        raise ConfigurationError("Cannot use both preprocess and document upload strategies at the same time.")
     # Parse the GCS path
     path = themefinder_output_path.removeprefix("gs://")
     if "/" not in path:
@@ -93,16 +115,9 @@ async def generate_report(
                 samples_block += (
                     f"\n[{tid}] Examples:\n" + "\n".join(f'  - "{r}"' for r in samples) + "\n"
                 )
-
-        # Generate report
-        llm = ChatVertexAI(model="gemini-2.5-flash", temperature=0.2)
+ 
         response = await llm.ainvoke([
-            SystemMessage(content=(
-                "I have been testing an application with the public which provides AI generated questions, only when they are appropriate, into a survey that aims to categorise the type of organisation the respondent works for.  The application consists of a survey section (asks job title, description and organisation description + dynamic questions when required) and a feedback section which allowed the respondents to provide \"other feedback\" by answering the question: \"Do you have any other feedback about this survey?\""
-                "I have run all of the responses from the public through a library called ThemeFinder - https://github.com/i-dot-ai/themefinder/ which maps responses to themes and categorises sentiment as well as indicating how detailed the feedback was and therefore how suitable for analysis."
-                "Use the ThemeFinder readme and the uploaded json output file to provide a high level summary of the themes identified, user sentiment to the application and the level of detail provided in the feedback."
-                "This output must be presented in a way that referes back to the input data to give examples and is accessible to non-data scientists."
-            )),
+            SystemMessage(content=SYSTEM_PROMPT),
             HumanMessage(content=(
                 f"Survey question: **{question}**\n\n"
                 f"## Themes\n{themes_block}\n\n"
@@ -110,28 +125,24 @@ async def generate_report(
                 "Write a comprehensive report based on this analysis."
             )),
         ])
+        prefix = "report_preprocessed"
+ 
     else:
-        # If not preprocessing, pass the full ThemeFinder output inline to Gemini and let it figure out how to use it.
-        llm = ChatVertexAI(model="gemini-2.5-flash", temperature=0.2)
+        # Pass the full ThemeFinder output inline to Gemini and let it figure
+        # out how to use it.
         response = await llm.ainvoke([
-            SystemMessage(content=(
-                "I have been testing an application with the public which provides AI generated questions, only when they are appropriate, into a survey that aims to categorise the type of organisation the respondent works for.  The application consists of a survey section (asks job title, description and organisation description + dynamic questions when required) and a feedback section which allowed the respondents to provide \"other feedback\" by answering the question: \"Do you have any other feedback about this survey?\""
-                "I have run all of the responses from the public through a library called ThemeFinder - https://github.com/i-dot-ai/themefinder/ which maps responses to themes and categorises sentiment as well as indicating how detailed the feedback was and therefore how suitable for analysis."
-                "Use the ThemeFinder readme and the uploaded json output file to provide a high level summary of the themes identified, user sentiment to the application and the level of detail provided in the feedback."
-                "This output must be presented in a way that referes back to the input data to give examples and is accessible to non-data scientists."
-            )),
+            SystemMessage(content=SYSTEM_PROMPT),
             HumanMessage(content=(
                 f"Survey question: **{question}**\n\n"
                 f"ThemeFinder output (JSON): {json.dumps(result)}\n\n"
                 "Write a comprehensive report based on this analysis."
             )),
         ])
-
+        prefix = "report_fulljson"
+ 
     report_text: str = response.content  # type: ignore[assignment]
     logger.info(f"Report generated ({len(report_text)} characters)")
-
-    prefix = "report_preprocessed" if preprocess else "report_fulljson"
-
+ 
     blob_name = f"reports/{make_timestamped_blob_name(prefix=prefix)}"
     save_themefinder_output_to_gcs(
         output={"report": report_text},
@@ -141,7 +152,7 @@ async def generate_report(
     logger.info(f"Report saved to gs://{output_bucket}/{blob_name}")
 
 
-async def run(preprocess: bool = True) -> None:
+async def run(preprocess: bool = False, use_document_upload: bool = False) -> None:
     logger.info("Starting report generator pipeline")
     load_dotenv()
 
@@ -164,7 +175,8 @@ async def run(preprocess: bool = True) -> None:
         themefinder_output_path=themefinder_output_path,
         question=question,
         output_bucket=output_bucket,
-        preprocess=preprocess
+        preprocess=preprocess,
+        use_document_upload=use_document_upload,
     )
 
 
@@ -172,6 +184,8 @@ def main() -> None:
     # Generates two reports, with/without themefinder output preprocessing. 
     asyncio.run(run(preprocess=True)) # run preprocessing on themefinder output to avoid passing full json inline to LLM
     asyncio.run(run(preprocess=False)) # generate report by passing full json file inline 
+    asyncio.run(run(use_document_upload=True)) # generate report by passing full json file as a base64-encoded document upload to Gemini
 
+ 
 if __name__ == "__main__":
     main()
