@@ -224,12 +224,12 @@ The structure of the file as follows:
 ]
 ```
 
-## Theme CSV Output
+## Theme CSV Outputs
 
-The ThemeFinder JSON specifies the themes under the themes list. Each theme has a topic_id (e.g A, B, C).
-Optionally, a CSV file per theme can be generated.
+The ThemeFinder JSON specifies the themes found under the themes list. Each theme has a topic_id (e.g A, B, C).
+A CSV file per theme can be generated.
 
-To enable the CSV file generation set:
+To enable the CSV file generation you need to set:
 ```
 GENERATE_THEMES_CSV=TRUE
 ```
