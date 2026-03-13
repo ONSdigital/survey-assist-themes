@@ -31,7 +31,7 @@ from survey_assist_themes.exceptions import (
 )
 from survey_assist_themes.utils.file_utils import (
     load_feedback_csv_from_gcs,
-    make_timestamped_blob_name,
+    make_timestamped_blob_names,
     save_themefinder_output_to_gcs,
 )
 from survey_assist_themes.utils.retry import async_retry_with_backoff
@@ -117,10 +117,12 @@ async def run() -> None:
         )
         logger.debug("Initialised ChatVertexAI with model: gemini-2.5-flash")
 
-        responses_df = load_feedback_csv_from_gcs(
+        feedback_data = load_feedback_csv_from_gcs(
             bucket_name=input_bucket,
             file_name=input_file,
         )
+        logger.debug(f"Feedback data loaded with keys: {list(feedback_data.keys())}")
+        responses_df, id_mapping_df = feedback_data["tf_df"], feedback_data["id_mapping"]
         logger.info(f"Loaded {len(responses_df)} survey responses")
 
     except Exception as e:
@@ -154,7 +156,9 @@ async def run() -> None:
         raise ThemeFinderError(f"ThemeFinder processing failed: {e}") from e
 
     try:
-        output_path = f"output/{make_timestamped_blob_name()}"
+        output_name, mapping_name = make_timestamped_blob_names()
+        output_path = f"output/{output_name}"
+        mapping_path = f"output/{mapping_name}"
         logger.info(f"Saving results to GCS bucket: {output_bucket}, path: {output_path}")
         save_themefinder_output_to_gcs(
             output=result,
@@ -162,6 +166,14 @@ async def run() -> None:
             destination_blob_name=output_path,
         )
         logger.info("Results saved successfully to GCS")
+
+        logger.info(f"Saving ID mapping to GCS bucket: {output_bucket}, path: {mapping_path}")
+        save_themefinder_output_to_gcs(
+            output={"id_mapping": id_mapping_df},
+            bucket_name=output_bucket,
+            destination_blob_name=mapping_path,
+        )
+        logger.info("ID mapping saved successfully to GCS")
 
     except Exception as e:
         logger.error(f"Failed to save results to GCS: {e}", exc_info=True)
