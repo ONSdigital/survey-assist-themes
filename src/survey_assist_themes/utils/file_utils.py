@@ -417,9 +417,15 @@ def save_theme_csvs_to_gcs(
             csv_name = f"{base_name}_theme_{topic_id}.csv"
             blob = bucket.blob(f"output/{csv_name}")
 
-            csv_content = df[
-                ["response_id", "original_id", "response", "theme_description"]
-            ].to_csv(index=False)
+            theme_description = df["theme_description"].iloc[0]
+
+            csv_df = df[["response_id", "original_id", "response"]].copy()
+
+            # Set the theme description only on the first row
+            csv_df["theme_description"] = pd.NA
+            csv_df.iloc[0, csv_df.columns.get_loc("theme_description")] = theme_description
+
+            csv_content = csv_df.to_csv(index=False)
 
             blob.upload_from_string(csv_content, content_type="text/csv")
 
