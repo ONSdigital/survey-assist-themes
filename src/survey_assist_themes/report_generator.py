@@ -208,7 +208,7 @@ async def run(preprocess: bool = False, use_document_upload: bool = False) -> No
 
 
 def main() -> None:
-    # Generates two reports, with/without themefinder output preprocessing. 
+    # Generates three reports, with/without themefinder output preprocessing and one with Gemini document upload
     asyncio.run(run(preprocess=True)) # run preprocessing on themefinder output to avoid passing full json inline to LLM
     asyncio.run(run(preprocess=False)) # generate report by passing full json file inline 
     asyncio.run(run(use_document_upload=True)) # generate report by passing full json file as a base64-encoded document upload to Gemini
