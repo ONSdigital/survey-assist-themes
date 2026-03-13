@@ -55,6 +55,7 @@ export INPUT_BUCKET=<INPUT_BUCKET_NAME>
 export INPUT_FILE=<INPUT_FOLDER>/<INPUT_FILENAME.CSV>
 export OUTPUT_BUCKET=<OUTPUT_BUCKET_NAME>
 export QUESTION=<Question String>
+export GENERATE_THEMES_CSV=<TRUE/FALSE>
 ```
 
 ## Install
@@ -222,3 +223,27 @@ The structure of the file as follows:
   }
 ]
 ```
+
+## Theme CSV Output
+
+The ThemeFinder JSON specifies the themes under the themes list. Each theme has a topic_id (e.g A, B, C).
+Optionally, a CSV file per theme can be generated.
+
+To enable the CSV file generation set:
+```
+GENERATE_THEMES_CSV=TRUE
+```
+
+The file name will match the ThemeFinder Output but will include the suffix: 
+
+```
+_theme_<TOPIC_ID>.csv
+```
+
+### Example theme CSV output
+
+| response_id | original_id | response | theme_description |
+|-------------|-------------|----------|-------------------|
+| 1 | STP00001 | Impossible to get seen | Inadequate Appointment System |
+| 2 | STP00002 | Phones always engaged | |
+| 3 | STP00003 | Doctors were helpful | |
