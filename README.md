@@ -245,5 +245,5 @@ _theme_<TOPIC_ID>.csv
 | response_id | original_id | response | theme_description |
 |-------------|-------------|----------|-------------------|
 | 1 | STP00001 | Impossible to get seen | Inadequate Appointment System |
-| 2 | STP00002 | Phones always engaged | |
-| 3 | STP00003 | Doctors were helpful | |
+| 2 | STP00002 | Phones always engaged | Inadequate Appointment System |
+| 3 | STP00003 | Doctors were helpful | Inadequate Appointment System |
