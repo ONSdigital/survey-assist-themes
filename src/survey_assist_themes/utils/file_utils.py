@@ -7,6 +7,7 @@ data for ThemeFinder, and saving ThemeFinder output back to GCS.
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -356,3 +357,75 @@ def make_timestamped_blob_names(
     output_name = f"{output_prefix}_{timestamp}.json"
     mapping_name = f"{output_prefix}_{timestamp}_mapping.json"
     return output_name, mapping_name
+
+
+def build_theme_table_df(result: dict[str, Any], id_mapping_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Builds a theme table from the ThemeFinder result and ID mapping DataFrame.
+
+    Args:
+        result: The ThemeFinder result dictionary.
+        id_mapping_df: DataFrame containing the ID mappings.
+
+    Returns:
+        A DataFrame representing the theme table.
+    """
+    mapping_df = pd.DataFrame(result["mapping"]).explode("labels")
+    themes_df = pd.DataFrame(result["themes"]).rename(columns={"topic": "theme_description"})
+    id_lookup_df = id_mapping_df[["response_id", "original_id"]].copy()
+
+    theme_table = (
+        mapping_df.rename(columns={"labels": "topic_id"})
+        .merge(
+            themes_df[["topic_id", "theme_description"]],
+            on="topic_id",
+            how="left",
+        )
+        .merge(id_lookup_df, on="response_id", how="left")
+    )
+
+    return theme_table[["response_id", "original_id", "response", "theme_description", "topic_id"]]
+
+
+def save_theme_csvs_to_gcs(
+    result: dict[str, Any], id_mapping_df: pd.DataFrame, bucket_name: str, output_name: str
+) -> None:
+    """
+    Save theme tables as CSV files to a Google Cloud Storage bucket.
+
+    Args:
+        result: The ThemeFinder result dictionary.
+        id_mapping_df: DataFrame containing the ID mappings.
+        bucket_name: Name of the GCS bucket where the CSV files will be stored.
+        output_name: Base name for the output CSV files; theme-specific suffixes will be added.
+
+    Raises:
+        DataProcessingError: If the theme table is empty after processing.
+
+    """
+    theme_table = build_theme_table_df(result, id_mapping_df)
+
+    if theme_table.empty:
+        raise DataProcessingError("Theme table is empty; no CSVs to save to GCS")
+
+    base_name, _ = os.path.splitext(output_name)
+    logger.debug(f"Saving output to GCS: bucket={bucket_name}, " f"blob={base_name}")
+    try:
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        for topic_id, df in theme_table.groupby("topic_id"):
+            csv_name = f"{base_name}_theme_{topic_id}.csv"
+            blob = bucket.blob(f"output/{csv_name}")
+
+            csv_df = df[["response_id", "original_id", "response", "theme_description"]].copy()
+
+            csv_content = csv_df.to_csv(index=False)
+
+            blob.upload_from_string(
+                csv_content.encode("utf-8-sig"),
+                content_type="text/csv; charset=utf-8",
+            )
+
+    except GoogleCloudError as e:
+        logger.error(f"GCS operation failed: {e}", exc_info=True)
+        raise GCSOperationError(f"Failed to save output to GCS: {e}") from e

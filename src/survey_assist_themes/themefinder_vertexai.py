@@ -32,6 +32,7 @@ from survey_assist_themes.exceptions import (
 from survey_assist_themes.utils.file_utils import (
     load_feedback_csv_from_gcs,
     make_timestamped_blob_names,
+    save_theme_csvs_to_gcs,
     save_themefinder_output_to_gcs,
 )
 from survey_assist_themes.utils.retry import async_retry_with_backoff
@@ -99,6 +100,7 @@ async def run() -> None:
     output_bucket = os.getenv("OUTPUT_BUCKET")
     input_file = os.getenv("INPUT_FILE", "input/example_feedback_v2.csv")
     eval_question = os.getenv("QUESTION", "Do you have any other feedback about this survey?")
+    generate_themes_csv = os.getenv("GENERATE_THEMES_CSV", "FALSE") == "TRUE"
 
     if not input_bucket or not output_bucket:
         msg = (
@@ -174,6 +176,16 @@ async def run() -> None:
             destination_blob_name=mapping_path,
         )
         logger.info("ID mapping saved successfully to GCS")
+
+        if generate_themes_csv:
+            logger.info("Generating Themes Tables to CSV Files")
+            save_theme_csvs_to_gcs(
+                result=result,
+                id_mapping_df=id_mapping_df,
+                bucket_name=output_bucket,
+                output_name=output_name,
+            )
+            logger.info("Themes CSV generated and saved successfully to GCS")
 
     except Exception as e:
         logger.error(f"Failed to save results to GCS: {e}", exc_info=True)
