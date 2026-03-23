@@ -49,5 +49,4 @@ install: ## Install the dependencies
 	poetry install --only main --no-root
 
 install-dev: ## Install the dev dependencies
-	poetry install --no-root
-
+	poetry install
