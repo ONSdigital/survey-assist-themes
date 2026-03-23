@@ -3,23 +3,22 @@ from __future__ import annotations
 
 import asyncio
 import base64
+from datetime import UTC, datetime
 import json
 import os
 from typing import Any
 
 from dotenv import load_dotenv
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_vertexai import ChatVertexAI
+from google.cloud import storage  # type: ignore[import]
+import vertexai
+from vertexai.generative_models import GenerativeModel, Part, Content
+
 from survey_assist_utils.logging import get_logger
 
-from survey_assist_themes.exceptions import ConfigurationError, ThemeFinderError
+from survey_assist_themes.exceptions import ConfigurationError, GCSOperationError, ThemeFinderError
 from survey_assist_themes.utils.file_utils import (
-    make_timestamped_blob_name,
     save_themefinder_output_to_gcs,
 )
-
-from google.cloud import storage  # type: ignore[import]
-from survey_assist_themes.exceptions import GCSOperationError
 
 logger = get_logger(__name__)
  
@@ -67,6 +66,8 @@ async def generate_report(
     themefinder_output_path: str,
     question: str,
     output_bucket: str,
+    project: str,
+    location: str,
     preprocess: bool = False,
     use_document_upload: bool = False,
 ) -> None:
@@ -82,32 +83,29 @@ async def generate_report(
     input_bucket, blob_name = path.split("/", 1)
 
     result = _load_themefinder_output_from_gcs(input_bucket, blob_name)
- 
-    llm = ChatVertexAI(model="gemini-2.5-flash", temperature=0.2)
- 
+    
+    vertexai.init(project=project, location=location)
+    model = GenerativeModel(
+        model_name="gemini-2.5-flash",
+        system_instruction=SYSTEM_PROMPT,
+    )
+
+    generation_config = {
+        "temperature": 0.2,
+    }
+
     if use_document_upload:
-        # uses Gemini's document handling rather than inline JSON in the prompt
+        # Pass the JSON as an inline data Part
         json_bytes = json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8")
-        b64_json = base64.b64encode(json_bytes).decode("utf-8")
- 
-        response = await llm.ainvoke([
-            SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=[
-                {
-                    "type": "text",
-                    "text": (
-                        f"Survey question: **{question}**\n\n"
-                        "The ThemeFinder output JSON is attached as a document below. "
-                        "Write a comprehensive report based on this analysis."
-                    ),
-                },
-                {
-                    "type": "media",
-                    "mime_type": "text/plain",
-                    "data": b64_json,
-                },
-            ]),
-        ])
+        json_part = Part.from_data(data=json_bytes, mime_type="text/plain")
+
+        prompt_part = Part.from_text(
+            f"Survey question: **{question}**\n\n"
+            "The ThemeFinder output JSON is attached as a document below. "
+            "Write a comprehensive report based on this analysis."
+        )
+
+        contents = [Content(role="user", parts=[prompt_part, json_part])]
         prefix = "report_document_upload"
  
     elif preprocess:
@@ -142,35 +140,39 @@ async def generate_report(
                 samples_block += (
                     f"\n[{tid}] Examples:\n" + "\n".join(f'  - "{r}"' for r in samples) + "\n"
                 )
- 
-        response = await llm.ainvoke([
-            SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=(
-                f"Survey question: **{question}**\n\n"
-                f"## Themes\n{themes_block}\n\n"
-                f"## Example responses\n{samples_block}\n\n"
-                "Write a comprehensive report based on this analysis."
-            )),
-        ])
+
+        prompt_text = (
+            f"Survey question: **{question}**\n\n"
+            f"## Themes\n{themes_block}\n\n"
+            f"## Example responses\n{samples_block}\n\n"
+            "Write a comprehensive report based on this analysis."
+        )
+
+        contents = [Content(role="user", parts=[Part.from_text(prompt_text)])]
         prefix = "report_preprocessed"
  
     else:
-        # Pass the full ThemeFinder output inline to Gemini and let it figure
-        # out how to use it.
-        response = await llm.ainvoke([
-            SystemMessage(content=SYSTEM_PROMPT),
-            HumanMessage(content=(
-                f"Survey question: **{question}**\n\n"
-                f"ThemeFinder output (JSON): {json.dumps(result)}\n\n"
-                "Write a comprehensive report based on this analysis."
-            )),
-        ])
+        # Pass the full ThemeFinder output inline
+        prompt_text = (
+            f"Survey question: **{question}**\n\n"
+            f"ThemeFinder output (JSON): {json.dumps(result)}\n\n"
+            "Write a comprehensive report based on this analysis."
+        )
+
+        contents = [Content(role="user", parts=[Part.from_text(prompt_text)])]
         prefix = "report_fulljson"
- 
-    report_text: str = response.content  # type: ignore[assignment]
+
+    # await the response from the model asynchronously
+    loop = asyncio.get_event_loop()
+    response = await loop.run_in_executor(
+        None,
+        lambda: model.generate_content(contents, generation_config=generation_config),
+    )
+
+    report_text: str = response.text
     logger.info(f"Report generated ({len(report_text)} characters)")
  
-    blob_name = f"reports/{make_timestamped_blob_name(prefix=prefix)}"
+    blob_name = f"reports/{prefix}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
     save_themefinder_output_to_gcs(
         output={"report": report_text},
         bucket_name=output_bucket,
@@ -186,10 +188,12 @@ async def run(preprocess: bool = False, use_document_upload: bool = False) -> No
     question = os.getenv("QUESTION", "Do you have any other feedback about this survey?")
     output_bucket = os.getenv("OUTPUT_BUCKET")
     themefinder_output_path = os.getenv("THEMEFINDER_OUTPUT_PATH")
+    project = os.getenv("GCP_PROJECT")
+    location = os.getenv("GCP_LOCATION", "europe-west2")
 
-    if not output_bucket or not themefinder_output_path:
+    if not output_bucket or not themefinder_output_path or not project:
         msg = (
-            "Environment variables OUTPUT_BUCKET and THEMEFINDER_OUTPUT_PATH "
+            "Environment variables OUTPUT_BUCKET, THEMEFINDER_OUTPUT_PATH, and GCP_PROJECT "
             "must be set in your .env file."
         )
         logger.error(msg)
@@ -202,6 +206,8 @@ async def run(preprocess: bool = False, use_document_upload: bool = False) -> No
         themefinder_output_path=themefinder_output_path,
         question=question,
         output_bucket=output_bucket,
+        project=project,
+        location=location,
         preprocess=preprocess,
         use_document_upload=use_document_upload,
     )
