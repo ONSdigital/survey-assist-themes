@@ -1,0 +1,10 @@
+{
+    "prompt": {
+        "prompt_template_path": "src/survey_assist_themes/prompts",
+        "prompt_template_name": "report_prompt_1.txt"
+    },
+    "model": {
+        "model_name": "gemini-2.5-flash",
+        "temperature": 0.2
+    }
+}
