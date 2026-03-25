@@ -340,7 +340,24 @@ def save_themefinder_output_to_gcs(
     exceptions=(GoogleCloudError, IOError),
 )
 def load_themefinder_output_from_gcs(bucket_name: str, blob_name: str) -> dict[str, Any]:
+    """Load ThemeFinder output JSON from a Google Cloud Storage blob.
 
+    Reads a JSON file stored in GCS and returns the parsed dictionary. The
+    blob name may include folder-like prefixes (for example
+    "themefinder/runs/2025-12-05/output.json").
+
+    Args:
+        bucket_name: Name of the GCS bucket containing the JSON blob.
+        blob_name: Path/name of the blob within the bucket.
+
+    Returns:
+        The parsed JSON content as a dictionary.
+
+    Raises:
+        GCSOperationError: If any GCS operation fails (for example if the bucket
+            or blob cannot be accessed or downloaded).
+        ThemeFinderError: If the downloaded content cannot be parsed as JSON.
+    """
     try:
         client = storage.Client()
         bucket = client.bucket(bucket_name)
