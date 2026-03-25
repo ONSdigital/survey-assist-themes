@@ -81,8 +81,10 @@ async def generate_report(
     mapping = result.get("mapping", [])
     sentiment_data = result.get("sentiment", [])
     detail_data = result.get("detailed_responses", [])
+    unprocessables = result.get("unprocessables", [])
     
     total_responses = len(mapping)
+    total_unprocessables = len(unprocessables)
 
     theme_counts = {}
     for m in mapping:
@@ -115,6 +117,7 @@ async def generate_report(
         "Write a comprehensive report based on this analysis using the following pre-calculated statistics:\n\n"
         f"**Thematic Summary:**\n"
         f"Total responses processed: {total_responses}\n"
+        f"Total unprocessables: {total_unprocessables}\n"
         f"Themes identified and their frequency:\n{themes_block}\n"
         f"Responses not mapped to any theme: {no_theme_count} ({(no_theme_count/total_responses*100):.1f}%)\n"
         f"Responses mapped to multiple themes: {multi_theme_count}\n\n"
