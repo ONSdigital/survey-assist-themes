@@ -22,24 +22,6 @@ from survey_assist_themes.utils.file_utils import (
 
 logger = get_logger(__name__)
  
-SYSTEM_PROMPT = (
-    "I have been testing an application with the public which provides AI generated questions, "
-    "only when they are appropriate, into a survey that aims to categorise the type of "
-    "organisation the respondent works for. The application consists of a survey section "
-    "(asks job title, description and organisation description + dynamic questions when required) "
-    "and a feedback section which allowed the respondents to provide \"other feedback\" by "
-    "answering the question: \"Do you have any other feedback about this survey?\""
-    "I have run all of the responses from the public through a library called ThemeFinder - "
-    "https://github.com/i-dot-ai/themefinder/ which maps responses to themes and categorises "
-    "sentiment as well as indicating how detailed the feedback was and therefore how suitable "
-    "for analysis."
-    "Use the ThemeFinder readme and the uploaded json output file to provide a high level summary "
-    "of the themes identified, user sentiment to the application and the level of detail provided "
-    "in the feedback."
-    "This output must be presented in a way that refers back to the input data to give examples "
-    "and is accessible to non-data scientists."
-)
- 
  
 def _load_themefinder_output_from_gcs(bucket_name: str, blob_name: str) -> dict[str, Any]:
 
@@ -64,7 +46,7 @@ def _load_themefinder_output_from_gcs(bucket_name: str, blob_name: str) -> dict[
 # Load report config, example config provided at src/survey_assist_themes/report_config.json.txt
 def get_report_config() -> dict[str, Any]:
     try:
-        with open("report_config.json", "r", encoding="utf-8") as f:
+        with open("src/survey_assist_themes/report_config.json", "r", encoding="utf-8") as f:
             config = json.load(f)
             logger.info("Report configuration loaded successfully.")
             return config
@@ -77,11 +59,7 @@ async def generate_report(
     output_bucket: str,
     project: str,
     location: str,
-    preprocess: bool = False,
-    use_document_upload: bool = False,
 ) -> None:
-    if preprocess and use_document_upload:
-        raise ConfigurationError("Cannot use both preprocess and document upload strategies at the same time.")
     # Parse the GCS path
     path = themefinder_output_path.removeprefix("gs://")
     if "/" not in path:
@@ -92,84 +70,85 @@ async def generate_report(
     input_bucket, blob_name = path.split("/", 1)
 
     result = _load_themefinder_output_from_gcs(input_bucket, blob_name)
-    
-    vertexai.init(project=project, location=location)
-    model = GenerativeModel(
-        model_name="gemini-2.5-flash",
-        system_instruction=SYSTEM_PROMPT,
+    config = get_report_config()
+
+    model_cfg = config["model"]
+    prompt_cfg = config["prompt"]
+
+    prompt_path = os.path.join(
+        prompt_cfg["prompt_template_path"],
+        prompt_cfg["prompt_template_name"],
     )
 
     generation_config = {
-        "temperature": 0.2,
+        "temperature": model_cfg["temperature"],
     }
 
-    if use_document_upload:
-        # Pass the JSON as an inline data Part
-        json_bytes = json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8")
-        json_part = Part.from_data(data=json_bytes, mime_type="text/plain")
+    try:
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            system_instruction = f.read()
+            logger.info(f"Loaded prompt template from {prompt_path}")
+    except Exception as e:
+        raise ConfigurationError(f"Failed to load prompt template from {prompt_path}: {e}") from e
+    
+    vertexai.init(project=project, location=location)
+    model = GenerativeModel(
+        model_name=model_cfg["model_name"],
+        system_instruction=system_instruction
+    )
+    
+    themes = result.get("themes", [])
+    mapping = result.get("mapping", [])
+    sentiment_data = result.get("sentiment", [])
+    detail_data = result.get("detailed_responses", [])
+    
+    total_responses = len(mapping)
 
-        prompt_part = Part.from_text(
-            f"Survey question: **{question}**\n\n"
-            "The ThemeFinder output JSON is attached as a document below. "
-            "Write a comprehensive report based on this analysis."
-        )
+    theme_counts = {}
+    for m in mapping:
+        for label in m.get("labels", []):
+            theme_counts[label] = theme_counts.get(label, 0) + 1
 
-        contents = [Content(role="user", parts=[prompt_part, json_part])]
-        prefix = "report_document_upload"
- 
-    elif preprocess:
-        themes = result.get("themes", [])
-        mapping = result.get("mapping", [])
+    themes_block = ""
+    for t in themes:
+        tid = t.get("topic_id")
+        count = theme_counts.get(tid, 0)
+        percentage = (count / total_responses * 100) if total_responses > 0 else 0
+        themes_block += f"- [{tid}] {t.get('topic')} | Count: {count} ({percentage:.1f}%)\n"
 
-        if not themes:
-            raise ThemeFinderError(
-                f"No themes found in result. Top-level keys: {list(result.keys())}"
-            )
+    pos_count = sum(1 for s in sentiment_data if s.get("position") == "AGREEMENT")
+    neg_count = sum(1 for s in sentiment_data if s.get("position") == "DISAGREEMENT")
+    unclear_count = sum(1 for s in sentiment_data if s.get("position") == "UNCLEAR")
 
-        logger.debug(f"First theme type: {type(themes[0])}, value: {themes[0]}")
+    rich_count = sum(1 for d in detail_data if d.get("evidence_rich") == "YES")
+    non_rich_count = sum(1 for d in detail_data if d.get("evidence_rich") == "NO")
 
-        # Build themes block
-        themes_block = "\n".join(
-            f"- [{t.get('topic_id', i)}] {t.get('topic', t)} (condensed from {t.get('source_topic_count', 0)} initial themes)"
-            if isinstance(t, dict) else f"- {t}"
-            for i, t in enumerate(themes)
-        )
+    no_theme_count = sum(1 for m in mapping if not m.get("labels"))
+    multi_theme_count = sum(1 for m in mapping if len(m.get("labels", [])) > 1)
 
-        # Group a few example responses by theme
-        responses_by_theme: dict[str, list[str]] = {}
-        for m in mapping:
-            for label in m.get("labels", []):
-                responses_by_theme.setdefault(str(label), []).append(m.get("response", ""))
+    json_bytes = json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8")
+    json_part = Part.from_data(data=json_bytes, mime_type="text/plain")
 
-        samples_block = ""
-        for t in themes:
-            tid = str(t.get("topic_id", "")) if isinstance(t, dict) else ""
-            samples = responses_by_theme.get(tid, [])[:5]
-            if samples:
-                samples_block += (
-                    f"\n[{tid}] Examples:\n" + "\n".join(f'  - "{r}"' for r in samples) + "\n"
-                )
+    prompt_part = Part.from_text(
+        f"Survey question: **{question}**\n\n"
+        "The ThemeFinder output JSON is attached as a document below. "
+        "Write a comprehensive report based on this analysis using the following pre-calculated statistics:\n\n"
+        f"**Thematic Summary:**\n"
+        f"Total responses processed: {total_responses}\n"
+        f"Themes identified and their frequency:\n{themes_block}\n"
+        f"Responses not mapped to any theme: {no_theme_count} ({(no_theme_count/total_responses*100):.1f}%)\n"
+        f"Responses mapped to multiple themes: {multi_theme_count}\n\n"
+        f"**Sentiment & Detail:**\n"
+        f"Sentiment breakdown: {pos_count} Agreement, {neg_count} Disagreement, {unclear_count} Unclear.\n"
+        f"Feedback depth: {rich_count} evidence-rich responses vs {non_rich_count} surface-level responses.\n\n"
+        "Please provide a high-level summary that is accessible to non-data scientists, "
+        "referring to specific examples from the JSON data to support the themes."
+    )
+    logger.debug(f"{prompt_part}")
 
-        prompt_text = (
-            f"Survey question: **{question}**\n\n"
-            f"## Themes\n{themes_block}\n\n"
-            f"## Example responses\n{samples_block}\n\n"
-            "Write a comprehensive report based on this analysis."
-        )
 
-        contents = [Content(role="user", parts=[Part.from_text(prompt_text)])]
-        prefix = "report_preprocessed"
- 
-    else:
-        # Pass the full ThemeFinder output inline
-        prompt_text = (
-            f"Survey question: **{question}**\n\n"
-            f"ThemeFinder output (JSON): {json.dumps(result)}\n\n"
-            "Write a comprehensive report based on this analysis."
-        )
-
-        contents = [Content(role="user", parts=[Part.from_text(prompt_text)])]
-        prefix = "report_fulljson"
+    contents = [Content(role="user", parts=[prompt_part, json_part])]
+    prefix = "report_document_upload"
 
     # await the response from the model asynchronously
     loop = asyncio.get_event_loop()
@@ -190,7 +169,7 @@ async def generate_report(
     logger.info(f"Report saved to gs://{output_bucket}/{blob_name}")
 
 
-async def run(preprocess: bool = False, use_document_upload: bool = False) -> None:
+async def run() -> None:
     logger.info("Starting report generator pipeline")
     load_dotenv()
 
@@ -217,19 +196,7 @@ async def run(preprocess: bool = False, use_document_upload: bool = False) -> No
         output_bucket=output_bucket,
         project=project,
         location=location,
-        preprocess=preprocess,
-        use_document_upload=use_document_upload,
     )
-
-
-async def main() -> None:
-    # Generates three reports, with/without themefinder output preprocessing and one with Gemini document upload
-    await asyncio.gather(
-        run(preprocess=True), # run preprocessing on themefinder output to avoid passing full json inline to LLM
-        run(preprocess=False), # generate report by passing full json file inline 
-        run(use_document_upload=True) # generate report by passing full json file as a base64-encoded document upload to Gemini
-    )
-
  
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run())
