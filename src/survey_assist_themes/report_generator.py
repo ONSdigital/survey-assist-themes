@@ -61,6 +61,15 @@ def _load_themefinder_output_from_gcs(bucket_name: str, blob_name: str) -> dict[
             f"Could not parse ThemeFinder output as JSON: {e}"
         ) from e
 
+# Load report config, example config provided at src/survey_assist_themes/report_config.json.txt
+def get_report_config() -> dict[str, Any]:
+    try:
+        with open("report_config.json", "r", encoding="utf-8") as f:
+            config = json.load(f)
+            logger.info("Report configuration loaded successfully.")
+            return config
+    except Exception as e:
+        raise ConfigurationError(f"Failed to load report configuration: {e}") from e
 
 async def generate_report(
     themefinder_output_path: str,
