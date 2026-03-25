@@ -132,14 +132,27 @@ async def generate_report(
 
     # await the response from the model asynchronously
     loop = asyncio.get_event_loop()
-    response = await loop.run_in_executor(
-        None,
-        lambda: model.generate_content(contents, generation_config=generation_config),
-    )
+    try:
+        response = await loop.run_in_executor(
+            None,
+            lambda: model.generate_content(contents, generation_config=generation_config),
+        )
+    except Exception as e:
+        logger.error(f"Report generation failed: {str(e)}")
+        raise ThemeFinderError(f"Model failed to generate report: {e}")
 
-    report_text: str = response.text
+    if not response.text:
+        msg = "LLM response missing or empty"
+        logger.error(msg)
+        raise ValueError(msg)
+    
+    try:
+        report_text: str = response.text
+    except Exception as e:
+        logger.error(f"Failed to extract report text: {str(e)}")
+        raise ThemeFinderError(f"Failed to extract report text: {e}")
     logger.info(f"Report generated ({len(report_text)} characters)")
- 
+
     blob_name = f"reports/{prefix}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
     save_markdown_report_to_gcs(
         report=report_text,
