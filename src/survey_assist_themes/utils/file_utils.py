@@ -18,7 +18,7 @@ from google.cloud import storage
 from google.cloud.exceptions import GoogleCloudError
 from survey_assist_utils.logging import get_logger
 
-from survey_assist_themes.exceptions import DataProcessingError, GCSOperationError
+from survey_assist_themes.exceptions import DataProcessingError, GCSOperationError, ThemeFinderError
 from survey_assist_themes.utils.retry import retry_with_backoff
 
 logger = get_logger(__name__)
@@ -331,7 +331,33 @@ def save_themefinder_output_to_gcs(
     except GoogleCloudError as e:
         logger.error(f"GCS operation failed: {e}", exc_info=True)
         raise GCSOperationError(f"Failed to save output to GCS: {e}") from e
+    
 
+@retry_with_backoff(
+    max_attempts=3,
+    initial_delay=1.0,
+    backoff_factor=2.0,
+    exceptions=(GoogleCloudError, IOError),
+)
+def load_themefinder_output_from_gcs(bucket_name: str, blob_name: str) -> dict[str, Any]:
+
+    try:
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+        raw = blob.download_as_text()
+        logger.info(f"Loaded ThemeFinder output from gs://{bucket_name}/{blob_name}")
+    except Exception as e:
+        raise GCSOperationError(
+            f"Failed to load ThemeFinder output from gs://{bucket_name}/{blob_name}: {e}"
+        ) from e
+
+    try:
+        return json.loads(raw)  # type: ignore[no-any-return]
+    except json.JSONDecodeError as e:
+        raise ThemeFinderError(
+            f"Could not parse ThemeFinder output as JSON: {e}"
+        ) from e
 
 @retry_with_backoff(
     max_attempts=3,

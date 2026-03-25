@@ -18,30 +18,10 @@ from survey_assist_utils.logging import get_logger
 from survey_assist_themes.exceptions import ConfigurationError, GCSOperationError, ThemeFinderError
 from survey_assist_themes.utils.file_utils import (
     save_markdown_report_to_gcs,
+    load_themefinder_output_from_gcs,
 )
 
 logger = get_logger(__name__)
- 
- 
-def _load_themefinder_output_from_gcs(bucket_name: str, blob_name: str) -> dict[str, Any]:
-
-    try:
-        client = storage.Client()
-        bucket = client.bucket(bucket_name)
-        blob = bucket.blob(blob_name)
-        raw = blob.download_as_text()
-        logger.info(f"Loaded ThemeFinder output from gs://{bucket_name}/{blob_name}")
-    except Exception as e:
-        raise GCSOperationError(
-            f"Failed to load ThemeFinder output from gs://{bucket_name}/{blob_name}: {e}"
-        ) from e
-
-    try:
-        return json.loads(raw)  # type: ignore[no-any-return]
-    except json.JSONDecodeError as e:
-        raise ThemeFinderError(
-            f"Could not parse ThemeFinder output as JSON: {e}"
-        ) from e
 
 # Load report config, example config provided at src/survey_assist_themes/report_config.json.txt
 def get_report_config() -> dict[str, Any]:
@@ -69,7 +49,7 @@ async def generate_report(
         )
     input_bucket, blob_name = path.split("/", 1)
 
-    result = _load_themefinder_output_from_gcs(input_bucket, blob_name)
+    result = load_themefinder_output_from_gcs(input_bucket, blob_name)
     config = get_report_config()
 
     model_cfg = config["model"]
