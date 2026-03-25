@@ -333,6 +333,71 @@ def save_themefinder_output_to_gcs(
         raise GCSOperationError(f"Failed to save output to GCS: {e}") from e
 
 
+@retry_with_backoff(
+    max_attempts=3,
+    initial_delay=1.0,
+    backoff_factor=2.0,
+    exceptions=(GoogleCloudError, IOError),
+)
+def save_markdown_report_to_gcs(
+    report: str,
+    *,
+    bucket_name: str,
+    destination_blob_name: str,
+    ensure_md_extension: bool = True,
+) -> None:
+    """Save a markdown report to a Google Cloud Storage bucket.
+
+    The `report` argument must be a markdown string. If `ensure_md_extension`
+    is True the destination blob name will be suffixed with `.md` if it does
+    not already end with that extension.
+
+    Args:
+        report: Markdown content as a string.
+        bucket_name: Name of the GCS bucket where the markdown file will be stored.
+        destination_blob_name: Name of the blob within the bucket, including
+            any folder-like prefixes.
+        ensure_md_extension: If True, append ".md" to destination name when missing.
+
+    Raises:
+        TypeError: If `report` is not a string.
+        FileNotFoundError: If the bucket does not exist.
+    """
+    if not isinstance(report, str):
+        msg = "The 'report' argument must be a string containing markdown content."
+        logger.error(msg)
+        raise TypeError(msg)
+
+    report_text = report
+
+    if ensure_md_extension and not destination_blob_name.lower().endswith(".md"):
+        destination_blob_name = destination_blob_name + ".md"
+
+    logger.debug(f"Saving markdown report to GCS: bucket={bucket_name}, blob={destination_blob_name}")
+    try:
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+
+        if not bucket.exists():
+            msg = f"The bucket '{bucket_name}' does not exist."
+            logger.error(msg)
+            raise FileNotFoundError(msg)
+
+        blob = bucket.blob(destination_blob_name)
+
+        blob.upload_from_string(
+            report_text,
+            content_type="text/markdown; charset=utf-8",
+        )
+        logger.info(
+            f"Successfully saved markdown report ({len(report_text)} bytes) to GCS: "
+            f"{bucket_name}/{destination_blob_name}"
+        )
+    except GoogleCloudError as e:
+        logger.error(f"GCS operation failed: {e}", exc_info=True)
+        raise GCSOperationError(f"Failed to save markdown report to GCS: {e}") from e
+
+
 def make_timestamped_blob_names(
     output_prefix: str = "themefinder_output",
 ) -> tuple[str, str]:

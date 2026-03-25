@@ -17,7 +17,7 @@ from survey_assist_utils.logging import get_logger
 
 from survey_assist_themes.exceptions import ConfigurationError, GCSOperationError, ThemeFinderError
 from survey_assist_themes.utils.file_utils import (
-    save_themefinder_output_to_gcs,
+    save_markdown_report_to_gcs,
 )
 
 logger = get_logger(__name__)
@@ -161,8 +161,8 @@ async def generate_report(
     logger.info(f"Report generated ({len(report_text)} characters)")
  
     blob_name = f"reports/{prefix}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
-    save_themefinder_output_to_gcs(
-        output={"report": report_text},
+    save_markdown_report_to_gcs(
+        report=report_text,
         bucket_name=output_bucket,
         destination_blob_name=blob_name,
     )
