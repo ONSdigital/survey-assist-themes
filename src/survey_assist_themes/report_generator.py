@@ -33,50 +33,7 @@ def get_report_config() -> dict[str, Any]:
     except Exception as e:
         raise ConfigurationError(f"Failed to load report configuration: {e}") from e
 
-async def generate_report(
-    themefinder_output_path: str,
-    question: str,
-    output_bucket: str,
-    project: str,
-    location: str,
-) -> None:
-    # Parse the GCS path
-    path = themefinder_output_path.removeprefix("gs://")
-    if "/" not in path:
-        raise ConfigurationError(
-            f"THEMEFINDER_OUTPUT_PATH must be in the form "
-            f"'gs://bucket/blob' or 'bucket/blob', got: {themefinder_output_path!r}"
-        )
-    input_bucket, blob_name = path.split("/", 1)
-
-    result = load_themefinder_output_from_gcs(input_bucket, blob_name)
-    config = get_report_config()
-
-    model_cfg = config["model"]
-    prompt_cfg = config["prompt"]
-
-    prompt_path = os.path.join(
-        prompt_cfg["prompt_template_path"],
-        prompt_cfg["prompt_template_name"],
-    )
-
-    generation_config = {
-        "temperature": model_cfg["temperature"],
-    }
-
-    try:
-        with open(prompt_path, "r", encoding="utf-8") as f:
-            system_instruction = f.read()
-            logger.info(f"Loaded prompt template from {prompt_path}")
-    except Exception as e:
-        raise ConfigurationError(f"Failed to load prompt template from {prompt_path}: {e}") from e
-    
-    vertexai.init(project=project, location=location)
-    model = GenerativeModel(
-        model_name=model_cfg["model_name"],
-        system_instruction=system_instruction
-    )
-    
+def generate_report_stats(result: dict[str, Any]) -> str:
     themes = result.get("themes", [])
     mapping = result.get("mapping", [])
     sentiment_data = result.get("sentiment", [])
@@ -108,13 +65,8 @@ async def generate_report(
     no_theme_count = sum(1 for m in mapping if not m.get("labels"))
     multi_theme_count = sum(1 for m in mapping if len(m.get("labels", [])) > 1)
 
-    json_bytes = json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8")
-    json_part = Part.from_data(data=json_bytes, mime_type="text/plain")
-
-    prompt_part = Part.from_text(
-        f"Survey question: **{question}**\n\n"
-        "The ThemeFinder output JSON is attached as a document below. "
-        "Write a comprehensive report based on this analysis using the following pre-calculated statistics:\n\n"
+    stats_text = (
+        "Response statistics:\n\n"
         f"**Thematic Summary:**\n"
         f"Total responses processed: {total_responses}\n"
         f"Total unprocessables: {total_unprocessables}\n"
@@ -127,42 +79,92 @@ async def generate_report(
         "Please provide a high-level summary that is accessible to non-data scientists, "
         "referring to specific examples from the JSON data to support the themes."
     )
-    logger.debug(f"{prompt_part}")
+    return stats_text
 
-
-    contents = [Content(role="user", parts=[prompt_part, json_part])]
-    prefix = "report_document_upload"
-
-    # await the response from the model asynchronously
-    loop = asyncio.get_event_loop()
-    try:
-        response = await loop.run_in_executor(
-            None,
-            lambda: model.generate_content(contents, generation_config=generation_config),
+async def generate_report(
+    themefinder_output_path: str,
+    question: str,
+    output_bucket: str,
+    project: str,
+    location: str,
+) -> None:
+    # Parse the GCS path
+    path = themefinder_output_path.removeprefix("gs://")
+    if "/" not in path:
+        raise ConfigurationError(
+            f"THEMEFINDER_OUTPUT_PATH must be in the form "
+            f"'gs://bucket/blob' or 'bucket/blob', got: {themefinder_output_path!r}"
         )
-    except Exception as e:
-        logger.error(f"Report generation failed: {str(e)}")
-        raise ThemeFinderError(f"Model failed to generate report: {e}")
+    input_bucket, blob_name = path.split("/", 1)
 
-    if not response.text:
-        msg = "LLM response missing or empty"
-        logger.error(msg)
-        raise ValueError(msg)
-    
-    try:
-        report_text: str = response.text
-    except Exception as e:
-        logger.error(f"Failed to extract report text: {str(e)}")
-        raise ThemeFinderError(f"Failed to extract report text: {e}")
-    logger.info(f"Report generated ({len(report_text)} characters)")
+    # load themefinder output json
+    result = load_themefinder_output_from_gcs(input_bucket, blob_name)
+    json_bytes = json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8")
+    json_part = Part.from_data(data=json_bytes, mime_type="text/plain")
 
-    blob_name = f"reports/{prefix}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
-    save_markdown_report_to_gcs(
-        report=report_text,
-        bucket_name=output_bucket,
-        destination_blob_name=blob_name,
-    )
-    logger.info(f"Report saved to gs://{output_bucket}/{blob_name}")
+    config = get_report_config()
+    for report_cfg in config.get("reports_config", []):
+
+        model_cfg = report_cfg["model"]
+        prompt_file_text = report_cfg["prompt_text"]
+        system_instruction = report_cfg["system_instructions"]
+
+        generation_config = {
+            "temperature": model_cfg["temperature"],
+        }
+
+        vertexai.init(project=project, location=location)
+        model = GenerativeModel(
+            model_name=model_cfg["model_name"],
+            system_instruction=system_instruction
+        )
+        
+        stats_text = None
+        if report_cfg.get("add_stats", False):
+            stats_text = generate_report_stats(result)
+
+        prompt_part = Part.from_text(
+            f"{prompt_file_text}\n\n"
+            f"Survey question: **{question}**\n\n"
+            "The ThemeFinder output JSON is attached as a document below. "
+            f"{'Here are some statistics about the responses:\n\n' + stats_text if stats_text else ''}"
+        )
+        logger.debug(f"{prompt_part}")
+
+
+        contents = [Content(role="user", parts=[prompt_part, json_part])]
+        prefix = "report_document_upload"
+
+        # await the response from the model asynchronously
+        loop = asyncio.get_event_loop() #TODO; rework to accommodate multiple reports in config
+        try:
+            response = await loop.run_in_executor(
+                None,
+                lambda: model.generate_content(contents, generation_config=generation_config),
+            )
+        except Exception as e:
+            logger.error(f"Report generation failed: {str(e)}")
+            raise ThemeFinderError(f"Model failed to generate report: {e}")
+
+        if not response.text:
+            msg = "LLM response missing or empty"
+            logger.error(msg)
+            raise ValueError(msg)
+        
+        try:
+            report_text: str = response.text
+        except Exception as e:
+            logger.error(f"Failed to extract report text: {str(e)}")
+            raise ThemeFinderError(f"Failed to extract report text: {e}")
+        logger.info(f"Report generated ({len(report_text)} characters)")
+
+        blob_name = f"reports/{prefix}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}" #TODO; put report next to output
+        save_markdown_report_to_gcs(
+            report=report_text,
+            bucket_name=output_bucket,
+            destination_blob_name=blob_name,
+        )
+        logger.info(f"Report saved to gs://{output_bucket}/{blob_name}")
 
 
 async def run() -> None:
