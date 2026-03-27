@@ -1,7 +1,0 @@
-I have been testing an application with the public which provides AI generated questions, only when they are appropriate, into a survey that aims to categorise the type of organisation the respondent works for. The application consists of a survey section (asks job title, description and organisation description + dynamic questions when required) and a feedback section which allowed the respondents to provide "other feedback" by answering the question: "Do you have any other feedback about this survey?"
-
-I have run all of the responses from the public through a library called ThemeFinder - https://github.com/i-dot-ai/themefinder/ which maps responses to themes and categorises sentiment as well as indicating how detailed the feedback was and therefore how suitable for analysis.
-
-Use the ThemeFinder readme and the uploaded json output file to provide a high level summary of the themes identified, user sentiment to the application and the level of detail provided in the feedback.
-
-This output must be presented in a way that refers back to the input data to give examples and is accessible to non-data scientists.
