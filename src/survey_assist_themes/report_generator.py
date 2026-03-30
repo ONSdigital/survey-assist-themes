@@ -92,12 +92,11 @@ async def _generate_single_report(
         contents = [Content(role="user", parts=[prompt_part, json_part])]
         prefix = "report_document_upload"
 
-        # await the response from the model asynchronously
-        loop = asyncio.get_event_loop()
         try:
-            response = await loop.run_in_executor(
-                None,
-                lambda: model.generate_content(contents, generation_config=generation_config),
+            response = await asyncio.to_thread(
+                model.generate_content, 
+                contents, 
+                generation_config=generation_config
             )
         except Exception as e:
             logger.error(f"Report generation failed: {str(e)}")
