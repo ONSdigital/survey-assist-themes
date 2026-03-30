@@ -81,62 +81,19 @@ def generate_report_stats(result: dict[str, Any]) -> str:
     )
     return stats_text
 
-async def generate_report(
-    themefinder_output_path: str,
-    question: str,
-    output_bucket: str,
-    project: str,
-    location: str,
-) -> None:
-    # Parse the GCS path
-    path = themefinder_output_path.removeprefix("gs://")
-    if "/" not in path:
-        raise ConfigurationError(
-            f"THEMEFINDER_OUTPUT_PATH must be in the form "
-            f"'gs://bucket/blob' or 'bucket/blob', got: {themefinder_output_path!r}"
-        )
-    input_bucket, blob_name = path.split("/", 1)
-
-    # load themefinder output json
-    result = load_themefinder_output_from_gcs(input_bucket, blob_name)
-    json_bytes = json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8")
-    json_part = Part.from_data(data=json_bytes, mime_type="text/plain")
-
-    config = get_report_config()
-    for report_cfg in config.get("reports_config", []):
-
-        model_cfg = report_cfg["model"]
-        prompt_file_text = report_cfg["prompt_text"]
-        system_instruction = report_cfg["system_instructions"]
-
-        generation_config = {
-            "temperature": model_cfg["temperature"],
-        }
-
-        vertexai.init(project=project, location=location)
-        model = GenerativeModel(
-            model_name=model_cfg["model_name"],
-            system_instruction=system_instruction
-        )
-        
-        stats_text = None
-        if report_cfg.get("add_stats", False):
-            stats_text = generate_report_stats(result)
-
-        prompt_part = Part.from_text(
-            f"{prompt_file_text}\n\n"
-            f"Survey question: **{question}**\n\n"
-            "The ThemeFinder output JSON is attached as a document below. "
-            f"{'Here are some statistics about the responses:\n\n' + stats_text if stats_text else ''}"
-        )
-        logger.debug(f"{prompt_part}")
-
-
+async def _generate_single_report(
+        prompt_part: Part,
+        json_part: Part,
+        model: GenerativeModel,
+        generation_config: dict[str, Any],
+        output_bucket: str,
+) -> str:
+        """Helper function to generate a single report asynchronously."""
         contents = [Content(role="user", parts=[prompt_part, json_part])]
         prefix = "report_document_upload"
 
         # await the response from the model asynchronously
-        loop = asyncio.get_event_loop() #TODO; rework to accommodate multiple reports in config
+        loop = asyncio.get_event_loop()
         try:
             response = await loop.run_in_executor(
                 None,
@@ -165,6 +122,68 @@ async def generate_report(
             destination_blob_name=blob_name,
         )
         logger.info(f"Report saved to gs://{output_bucket}/{blob_name}")
+
+async def generate_report(
+    themefinder_output_path: str,
+    question: str,
+    output_bucket: str,
+    project: str,
+    location: str,
+) -> None:
+    # Parse the GCS path
+    path = themefinder_output_path.removeprefix("gs://")
+    if "/" not in path:
+        raise ConfigurationError(
+            f"THEMEFINDER_OUTPUT_PATH must be in the form "
+            f"'gs://bucket/blob' or 'bucket/blob', got: {themefinder_output_path!r}"
+        )
+    input_bucket, blob_name = path.split("/", 1)
+
+    # load themefinder output json
+    result = load_themefinder_output_from_gcs(input_bucket, blob_name)
+    json_bytes = json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8")
+    json_part = Part.from_data(data=json_bytes, mime_type="text/plain")
+
+    config = get_report_config()
+
+    report_tasks = []
+    # Iterate over report configs and produce task list
+    for report_cfg in config.get("reports_config", []):
+
+        model_cfg = report_cfg["model"]
+        prompt_file_text = report_cfg["prompt_text"]
+        system_instruction = report_cfg["system_instructions"]
+
+        vertexai.init(project=project, location=location)
+        model = GenerativeModel(
+            model_name=model_cfg["model_name"],
+            system_instruction=system_instruction
+        )
+        
+        stats_text = None
+        if report_cfg.get("add_stats", False):
+            stats_text = generate_report_stats(result)
+
+        prompt_part = Part.from_text(
+            f"{prompt_file_text}\n\n"
+            f"Survey question: **{question}**\n\n"
+            "The ThemeFinder output JSON is attached as a document below. "
+            f"{'Here are some statistics about the responses:\n\n' + stats_text if stats_text else ''}"
+        )
+        logger.debug(f"{prompt_part}")
+
+        report_tasks.append(
+            _generate_single_report(
+                prompt_part=prompt_part,
+                json_part=json_part,
+                model=model,
+                generation_config={"temperature": model_cfg.get("temperature", 0.2)},
+                output_bucket=output_bucket,
+            )
+        )
+
+    await asyncio.gather(*report_tasks)
+    logger.info("All report generation tasks completed")
 
 
 async def run() -> None:
