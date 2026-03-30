@@ -82,21 +82,18 @@ def generate_report_stats(result: dict[str, Any]) -> str:
     return stats_text
 
 async def _generate_single_report(
-        prompt_part: Part,
-        json_part: Part,
-        model: GenerativeModel,
-        generation_config: dict[str, Any],
-        output_bucket: str,
+        config: dict[str, Any],
 ) -> str:
         """Helper function to generate a single report asynchronously."""
-        contents = [Content(role="user", parts=[prompt_part, json_part])]
-        prefix = "report_document_upload"
-
+        contents = [Content(role="user", parts=[config["prompt_part"], config["json_part"]])]
+        title = config.get("title", "report")
+        prefix = f"{config["blob_name"].rsplit('.', 1)[0]}_{title.replace(' ', '_')}"
+        logger.info(f"Generating report '{title}'")
         try:
             response = await asyncio.to_thread(
-                model.generate_content, 
+                config["model"].generate_content, 
                 contents, 
-                generation_config=generation_config
+                generation_config=config["model_config"]
             )
         except Exception as e:
             logger.error(f"Report generation failed: {str(e)}")
@@ -114,13 +111,12 @@ async def _generate_single_report(
             raise ThemeFinderError(f"Failed to extract report text: {e}")
         logger.info(f"Report generated ({len(report_text)} characters)")
 
-        blob_name = f"reports/{prefix}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}" #TODO; put report next to output
         save_markdown_report_to_gcs(
             report=report_text,
-            bucket_name=output_bucket,
-            destination_blob_name=blob_name,
+            bucket_name=config["output_bucket"],
+            destination_blob_name=prefix,
         )
-        logger.info(f"Report saved to gs://{output_bucket}/{blob_name}")
+        logger.info(f"Report saved to gs://{config["output_bucket"]}/{prefix}.md")
 
 async def generate_report(
     themefinder_output_path: str,
@@ -171,13 +167,21 @@ async def generate_report(
         )
         logger.debug(f"{prompt_part}")
 
+        generation_config = {
+            "model_config": {
+                "temperature": model_cfg.get("temperature", 0.2)
+            },
+            "model": model,
+            "title": report_cfg.get("title", "report"),
+            "blob_name": blob_name, # name of the themefinder output file
+            "prompt_part": prompt_part,
+            "json_part": json_part,
+            "output_bucket": output_bucket,
+        }
+
         report_tasks.append(
             _generate_single_report(
-                prompt_part=prompt_part,
-                json_part=json_part,
-                model=model,
-                generation_config={"temperature": model_cfg.get("temperature", 0.2)},
-                output_bucket=output_bucket,
+                config=generation_config,
             )
         )
 
