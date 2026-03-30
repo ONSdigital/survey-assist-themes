@@ -1,10 +1,34 @@
 {
-    "prompt": {
-        "prompt_template_path": "src/survey_assist_themes/prompts",
-        "prompt_template_name": "report_prompt_1.txt"
-    },
-    "model": {
-        "model_name": "gemini-2.5-flash",
-        "temperature": 0.2
-    }
+    "reports_config": [    
+        {
+            "title": "high level overview",
+            "prompt_text": "I have been testing an application with the public which provides AI generated questions, only when they are appropriate, into a survey that aims to categorise the type of organisation the respondent works for. The application consists of a survey section (asks job title, description and organisation description + dynamic questions when required) and a feedback section which allowed the respondents to provide \"other feedback\" by answering the question: \"Do you have any other feedback about this survey?\"I have run all of the responses from the public through a library called ThemeFinder - https://github.com/i-dot-ai/themefinder/ which maps responses to themes and categorises sentiment as well as indicating how detailed the feedback was and therefore how suitable for analysis. Use the ThemeFinder readme and the uploaded json output file to provide a high level summary of the themes identified, user sentiment to the application and the level of detail provided in the feedback.This output must be presented in a way that refers back to the input data to give examples and is accessible to non-data scientists.",
+            "system_instructions": "You are an accomplished data analyst proficient in topic modelling and theme analysis of public free text responses. Given a question and some themeatic output derived from free text responses you write a report based on the findings that follow best practice for reporting topics identified from public feedback for a UK public sector context. You must explain ThemeFinder output in plain English. You must write for non-data scientists. You must ground claims in the supplied data. You must avoid speculation. You must structure the report clearly. You must output your report as a markdown file.",
+            "model": {
+                "model_name": "gemini-2.5-flash",
+                "temperature": 0.2
+            },
+            "add_stats": true
+        },
+        {
+            "title": "welsh report",
+            "prompt_text": "I have been testing an application with the public which provides AI generated questions, only when they are appropriate, into a survey that aims to categorise the type of organisation the respondent works for. The application consists of a survey section (asks job title, description and organisation description + dynamic questions when required) and a feedback section which allowed the respondents to provide \"other feedback\" by answering the question: \"Do you have any other feedback about this survey?\"I have run all of the responses from the public through a library called ThemeFinder - https://github.com/i-dot-ai/themefinder/ which maps responses to themes and categorises sentiment as well as indicating how detailed the feedback was and therefore how suitable for analysis. Use the ThemeFinder readme and the uploaded json output file to provide a high level summary of the themes identified, user sentiment to the application and the level of detail provided in the feedback.This output must be presented in a way that refers back to the input data to give examples and is accessible to non-data scientists.",
+            "system_instructions": "You are an accomplished data analyst proficient in topic modelling and theme analysis of public free text responses. Given a question and some themeatic output derived from free text responses you write a report based on the findings that follow best practice for reporting topics identified from public feedback for a UK public sector context. You must explain ThemeFinder output in plain English. You must write for non-data scientists. You must ground claims in the supplied data. You must avoid speculation. You must structure the report clearly. You must output your report as a markdown file. Your report must be in Welsh.",
+            "model": {
+                "model_name": "gemini-2.5-flash",
+                "temperature": 0.2
+            },
+            "add_stats": false
+        },
+        {
+            "title": "report without stats",
+            "prompt_text": "I have been testing an application with the public which provides AI generated questions, only when they are appropriate, into a survey that aims to categorise the type of organisation the respondent works for. The application consists of a survey section (asks job title, description and organisation description + dynamic questions when required) and a feedback section which allowed the respondents to provide \"other feedback\" by answering the question: \"Do you have any other feedback about this survey?\"I have run all of the responses from the public through a library called ThemeFinder - https://github.com/i-dot-ai/themefinder/ which maps responses to themes and categorises sentiment as well as indicating how detailed the feedback was and therefore how suitable for analysis. Use the ThemeFinder readme and the uploaded json output file to provide a high level summary of the themes identified, user sentiment to the application and the level of detail provided in the feedback.This output must be presented in a way that refers back to the input data to give examples and is accessible to non-data scientists.",
+            "system_instructions": "You are an accomplished data analyst proficient in topic modelling and theme analysis of public free text responses. Given a question and some themeatic output derived from free text responses you write a report based on the findings that follow best practice for reporting topics identified from public feedback for a UK public sector context. You must explain ThemeFinder output in plain English. You must write for non-data scientists. You must ground claims in the supplied data. You must avoid speculation. You must structure the report clearly. You must output your report as a markdown file.",
+            "model": {
+                "model_name": "gemini-2.5-flash",
+                "temperature": 1.0
+            },
+            "add_stats": false
+        }
+    ]
 }
