@@ -1,4 +1,11 @@
-"""Spike to generate a report using the ThemeFinder output with Gemini and Vertex AI."""
+"""
+This module generates markdown reports based on the output from the ThemeFinder pipeline. 
+It reads the ThemeFinder output JSON from a specified GCS location, processes it,
+and uses a generative model to create reports summarising the themes identified in survey feedback.
+The report generation is configurable via a JSON config file, allowing for different prompts, model settings, and report titles.
+Additional statistics about the themes and sentiments can also be included in the report based on the configuration.
+The generated reports are then saved back to GCS.
+"""
 from __future__ import annotations
 
 import asyncio
