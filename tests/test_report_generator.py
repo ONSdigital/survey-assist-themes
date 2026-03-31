@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, mock_open, patch, call
 from datetime import UTC, datetime
 
 import pytest
@@ -21,59 +21,74 @@ from survey_assist_themes.exceptions import ConfigurationError, ThemeFinderError
 class TestGetReportConfig:
     """Tests for get_report_config function."""
 
-    def test_get_report_config_success(self, tmp_path): #TODO;
+    def test_get_report_config_success(self):
         """Test successfully loading report configuration."""
-        config_file = tmp_path / "report_config.json"
         config_data = {
             "reports_config": [
                 {
-                    "model": {"model_name": "gemini-1.5-pro", "temperature": 0.2},
+                    "model": {"model_name": "gemini-2.5-flash", "temperature": 0.2},
                     "prompt_text": "Generate a report",
                     "system_instructions": "You are a report generator",
                 }
             ]
         }
-        config_file.write_text(json.dumps(config_data))
-
-        with patch(
-            "survey_assist_themes.report_generator.open",
-            create=True,
-        ) as mock_open:
-            mock_open.return_value.__enter__.return_value.read.return_value = json.dumps(
-                config_data
-            )
-            # Would need to mock the actual file read
-            # For now, this shows the test structure
+    
+        with patch("builtins.open", mock_open(read_data=json.dumps(config_data))):
+            result = get_report_config()
+    
+        assert result == config_data
+        assert result["reports_config"][0]["model"]["model_name"] == "gemini-2.5-flash"
+        assert result["reports_config"][0]["model"]["temperature"] == 0.2
 
     def test_get_report_config_file_not_found(self):
         """Test error handling when config file not found."""
-        with patch(
-            "builtins.open", side_effect=FileNotFoundError("Config not found")
-        ):
+        with patch("builtins.open", side_effect=FileNotFoundError("Config not found")):
             with pytest.raises(ConfigurationError) as exc_info:
                 get_report_config()
             assert "Failed to load report configuration" in str(exc_info.value)
 
-    def test_get_report_config_invalid_json(self): #TODO;
+    def test_get_report_config_invalid_json(self):
         """Test error handling for invalid JSON."""
-        with patch("builtins.open", create=True) as mock_open:
-            mock_open.return_value.__enter__.return_value.read.return_value = "invalid"
-            mock_open.return_value.__enter__.return_value = MagicMock()
-            with patch("json.load", side_effect=json.JSONDecodeError("msg", "doc", 0)):
-                with pytest.raises(ConfigurationError):
-                    get_report_config()
+        invalid_json = "{ invalid json"
+        
+        with patch("builtins.open", mock_open(read_data=invalid_json)):
+            with pytest.raises(ConfigurationError) as exc_info:
+                get_report_config()
+            assert "Failed to load report configuration" in str(exc_info.value)
 
-    def test_get_report_config_missing_keys(self): #TODO;
+    def test_get_multiple_report_configs(self):
+        """Test loading config file with multilpe report configs."""
+        config_data = {
+            "reports_config": [
+                {
+                    "model": {"model_name": "gemini-2.5-flash", "temperature": 0.2},
+                    "prompt_text": "Executive summary",
+                    "system_instructions": "Be concise",
+                    "title": "Summary",
+                },
+                {
+                    "model": {"model_name": "gemini-2.5-flash", "temperature": 0.3},
+                    "prompt_text": "Detailed analysis",
+                    "system_instructions": "Be thorough",
+                    "title": "Detailed",
+                },
+            ]
+        }
+
+        with patch("builtins.open", mock_open(read_data=json.dumps(config_data))):
+            result = get_report_config()
+
+        assert len(result["reports_config"]) == 2
+        assert result["reports_config"][0]["title"] == "Summary"
+        assert result["reports_config"][1]["title"] == "Detailed")
+
+    def test_get_report_config_missing_keys(self):
         """Test handling of missing expected keys in config."""
         config_data = {"unexpected_key": "value"}
-        with patch(
-            "builtins.open", create=True
-        ) as mock_open:
-            mock_open.return_value.__enter__.return_value.read.return_value = json.dumps(
-                config_data
-            )
-            with pytest.raises(ConfigurationError):
+        with patch("builtins.open", mock_open(read_data=json.dumps(config_data))):
+            with pytest.raises(ConfigurationError) as exc_info:
                 get_report_config()
+            assert "Failed to load report configuration" in str(exc_info.value)
 
 
 class TestGenerateReportStats:
