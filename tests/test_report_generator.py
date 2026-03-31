@@ -80,7 +80,7 @@ class TestGetReportConfig:
 
         assert len(result["reports_config"]) == 2
         assert result["reports_config"][0]["title"] == "Summary"
-        assert result["reports_config"][1]["title"] == "Detailed")
+        assert result["reports_config"][1]["title"] == "Detailed"
 
     def test_get_report_config_missing_keys(self):
         """Test handling of missing expected keys in config."""
