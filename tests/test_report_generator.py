@@ -15,7 +15,7 @@ from survey_assist_themes.report_generator import (
     _generate_single_report,
     generate_report,
 )
-from survey_assist_themes.exceptions import ConfigurationError, ThemeFinderError
+from survey_assist_themes.exceptions import ConfigurationError, GCSOperationError, ThemeFinderError
 
 
 class TestGetReportConfig:
@@ -146,7 +146,7 @@ class TestGenerateReportStats:
         assert "Total unprocessables: 0" in stats
         assert "Sentiment breakdown: 0 Agreement, 0 Disagreement, 0 Unclear" in stats
 
-    def test_generate_report_stats_no_divisions_by_zero(self): #TODO;
+    def test_generate_report_stats_no_divisions_by_zero(self):
         """Test that stats handles zero responses without division errors."""
         result = {
             "themes": [{"topic_id": "A", "topic": "Theme"}],
@@ -182,98 +182,64 @@ class TestGenerateReportStats:
         stats = generate_report_stats(result)
         assert "Sentiment breakdown: 2 Agreement, 0 Disagreement, 0 Unclear" in stats
 
+@pytest.fixture
+def base_config():
+    """Fixture for common config used in multiple tests."""
+    return {
+        "model": MagicMock(spec=GenerativeModel),
+        "model_config": {"temperature": 0.2},
+        "title": "Executive Summary",
+        "blob_name": "themefinder_output.json",
+        "prompt_part": Part.from_text("Test prompt"),
+        "json_part": Part.from_data(data=b"test", mime_type="text/plain"),
+        "output_bucket": "test-bucket",
+    }
 
 class TestGenerateSingleReport:
     """Tests for _generate_single_report async function."""
 
-    @pytest.mark.asyncio
-    async def test_generate_single_report_success(self):
+    def test_generate_single_report_success(self, base_config):
         """Test successful single report generation."""
-        mock_model = MagicMock(spec=GenerativeModel)
+
         mock_response = MagicMock()
         mock_response.text = "Generated report content"
+        base_config["model"].generate_content.return_value = mock_response
+ 
+        with patch(
+            "survey_assist_themes.report_generator.save_markdown_report_to_gcs"
+        ) as mock_save:
+            asyncio.run(_generate_single_report(base_config))
 
-        config = {
-            "model": mock_model,
-            "model_config": {"temperature": 0.2},
-            "title": "Executive Summary",
-            "blob_name": "themefinder_output.json",
-            "prompt_part": Part.from_text("Test prompt"),
-            "json_part": Part.from_data(data=b"test", mime_type="text/plain"),
-            "output_bucket": "test-bucket",
-        }
+        mock_save.assert_called_once()
+        call_args = mock_save.call_args
+ 
+        assert call_args[1]["bucket_name"] == "test-bucket"
+        assert "Executive_Summary" in call_args[1]["destination_blob_name"]
+        assert call_args[1]["report"] == "Generated report c ontent"
 
-        with patch("asyncio.to_thread") as mock_to_thread:
-            mock_to_thread.return_value = mock_response
-            with patch(
-                "survey_assist_themes.report_generator.save_markdown_report_to_gcs"
-            ) as mock_save:
-                await _generate_single_report(config)
-
-                mock_to_thread.assert_called_once()
-                mock_save.assert_called_once()
-                call_args = mock_save.call_args
-                assert call_args[1]["bucket_name"] == "test-bucket"
-                assert "Executive_Summary" in call_args[1]["destination_blob_name"]
-
-    @pytest.mark.asyncio
-    async def test_generate_single_report_empty_response(self):
+    def test_generate_single_report_empty_response(self, base_config):
         """Test error handling when model returns empty response."""
-        mock_model = MagicMock(spec=GenerativeModel)
+
         mock_response = MagicMock()
         mock_response.text = ""
+        base_config["model"].generate_content.return_value = mock_response
+ 
+        with pytest.raises(ValueError, match="LLM response missing or empty"):
+            asyncio.run(_generate_single_report(base_config))
 
-        config = {
-            "model": mock_model,
-            "model_config": {"temperature": 0.2},
-            "title": "test",
-            "blob_name": "output.json",
-            "prompt_part": Part.from_text("Test"),
-            "json_part": Part.from_data(data=b"test", mime_type="text/plain"),
-            "output_bucket": "bucket",
-        }
-
-        with patch("asyncio.to_thread") as mock_to_thread:
-            mock_to_thread.return_value = mock_response
-            with pytest.raises(ValueError, match="LLM response missing or empty"):
-                await _generate_single_report(config)
-
-    @pytest.mark.asyncio
-    async def test_generate_single_report_model_error(self):
+    def test_generate_single_report_model_error(self, base_config):
         """Test error handling when model generation fails."""
-        mock_model = MagicMock(spec=GenerativeModel)
 
-        config = {
-            "model": mock_model,
-            "model_config": {"temperature": 0.2},
-            "title": "test",
-            "blob_name": "output.json",
-            "prompt_part": Part.from_text("Test"),
-            "json_part": Part.from_data(data=b"test", mime_type="text/plain"),
-            "output_bucket": "bucket",
-        }
-
-        with patch("asyncio.to_thread") as mock_to_thread:
-            mock_to_thread.side_effect = Exception("API Error")
-            with pytest.raises(ThemeFinderError, match="Model failed to generate report"):
-                await _generate_single_report(config)
+        base_config["model"].generate_content.side_effect = Exception("API Error")
+ 
+        with pytest.raises(ThemeFinderError, match="Model failed to generate report"):
+            asyncio.run(_generate_single_report(base_config))
 
     @pytest.mark.asyncio
-    async def test_generate_single_report_gcs_save_error(self):
+    async def test_generate_single_report_gcs_save_error(self, base_config): #TODO; async not working
         """Test error handling when GCS save fails."""
-        mock_model = MagicMock(spec=GenerativeModel)
         mock_response = MagicMock()
         mock_response.text = "Valid content"
-
-        config = {
-            "model": mock_model,
-            "model_config": {"temperature": 0.2},
-            "title": "test",
-            "blob_name": "output.json",
-            "prompt_part": Part.from_text("Test"),
-            "json_part": Part.from_data(data=b"test", mime_type="text/plain"),
-            "output_bucket": "bucket",
-        }
 
         with patch("asyncio.to_thread") as mock_to_thread:
             mock_to_thread.return_value = mock_response
@@ -281,8 +247,8 @@ class TestGenerateSingleReport:
                 "survey_assist_themes.report_generator.save_markdown_report_to_gcs",
                 side_effect=Exception("GCS Error"),
             ):
-                with pytest.raises(Exception, match="GCS Error"):
-                    await _generate_single_report(config)
+                with pytest.raises(GCSOperationError, match="Failed to save report to GCS"):
+                    asyncio.run(_generate_single_report(base_config))
 
 
 class TestGenerateReport:

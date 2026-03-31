@@ -118,12 +118,16 @@ async def _generate_single_report(
             raise ThemeFinderError(f"Failed to extract report text: {e}")
         logger.info(f"Report generated ({len(report_text)} characters)")
 
-        save_markdown_report_to_gcs(
-            report=report_text,
-            bucket_name=config["output_bucket"],
-            destination_blob_name=prefix,
-        )
-        logger.info(f"Report saved to gs://{config["output_bucket"]}/{prefix}.md")
+        try:
+            save_markdown_report_to_gcs(
+                report=report_text,
+                bucket_name=config["output_bucket"],
+                destination_blob_name=prefix,
+            )
+            logger.info(f"Report saved to gs://{config["output_bucket"]}/{prefix}.md")
+        except Exception as e:
+            logger.error(f"Failed to save report to GCS: {str(e)}")
+            raise GCSOperationError(f"Failed to save report to GCS: {e}")
 
 async def generate_report(
     themefinder_output_path: str,
