@@ -70,6 +70,7 @@ def generate_report_stats(result: dict[str, Any]) -> str:
     non_rich_count = sum(1 for d in detail_data if d.get("evidence_rich") == "NO")
 
     no_theme_count = sum(1 for m in mapping if not m.get("labels"))
+    no_theme_count_pct = (no_theme_count / total_responses * 100) if total_responses > 0 else 0
     multi_theme_count = sum(1 for m in mapping if len(m.get("labels", [])) > 1)
 
     stats_text = (
@@ -78,7 +79,7 @@ def generate_report_stats(result: dict[str, Any]) -> str:
         f"Total responses processed: {total_responses}\n"
         f"Total unprocessables: {total_unprocessables}\n"
         f"Themes identified and their frequency:\n{themes_block}\n"
-        f"Responses not mapped to any theme: {no_theme_count} ({(no_theme_count/total_responses*100):.1f}%)\n"
+        f"Responses not mapped to any theme: {no_theme_count} ({no_theme_count_pct:.1f}%)\n"
         f"Responses mapped to multiple themes: {multi_theme_count}\n\n"
         f"**Sentiment & Detail:**\n"
         f"Sentiment breakdown: {pos_count} Agreement, {neg_count} Disagreement, {unclear_count} Unclear.\n"
