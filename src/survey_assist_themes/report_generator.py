@@ -36,6 +36,14 @@ def get_report_config() -> dict[str, Any]:
         with open("src/survey_assist_themes/report_config.json", "r", encoding="utf-8") as f:
             config = json.load(f)
             logger.info("Report configuration loaded successfully.")
+            if "reports_config" not in config:
+                raise KeyError("Missing required key 'reports_config' in configuration")
+            
+            if not isinstance(config["reports_config"], list):
+                raise ValueError("'reports_config' must be a list")
+            
+            if len(config["reports_config"]) == 0:
+                raise ValueError("'reports_config' cannot be empty")
             return config
     except Exception as e:
         raise ConfigurationError(f"Failed to load report configuration: {e}") from e
