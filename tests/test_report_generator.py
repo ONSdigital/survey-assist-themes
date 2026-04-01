@@ -418,35 +418,30 @@ class TestGenerateReport:
  
                             mock_load.assert_called_once_with("my-bucket", "path/to/output.json")
  
-    def test_generate_report_invalid_gcs_path_no_slash(self):
+    @pytest.mark.asyncio
+    async def test_generate_report_invalid_gcs_path_no_slash(self):
         """Test error handling for invalid GCS path without slash."""
-        with patch("survey_assist_themes.report_generator.load_themefinder_output_from_gcs",return_value={}):
+        with patch("survey_assist_themes.report_generator.load_themefinder_output_from_gcs"):
             with pytest.raises(ConfigurationError, match="must be in the form"):
-                asyncio.run(
-                    generate_report(
-                        themefinder_output_path="gs://bucket",
-                        question="Q?",
-                        output_bucket="out",
-                        project="p",
-                        location="l",
-                    )
+                await generate_report(
+                    themefinder_output_path="gs://bucket",
+                    question="Q?",
+                    output_bucket="out",
+                    project="p",
+                    location="l",
                 )
  
-    def test_generate_report_invalid_gcs_path_no_gs(self):
+    @pytest.mark.asyncio
+    async def test_generate_report_invalid_gcs_path_no_gs(self):
         """Test error handling for GCS path without gs:// prefix."""
-        with patch("survey_assist_themes.report_generator.vertexai.init"), \
-            patch("survey_assist_themes.report_generator.GenerativeModel"), \
-            patch("survey_assist_themes.report_generator.load_themefinder_output_from_gcs",return_value={}):
-            with pytest.raises(ConfigurationError, match="must be in the form"):
-                asyncio.run(
-                    generate_report(
-                        themefinder_output_path="bucket/blob",
-                        question="Q?",
-                        output_bucket="out",
-                        project="p",
-                        location="l",
-                    )
-                
+        with patch("survey_assist_themes.report_generator.load_themefinder_output_from_gcs"):
+            with pytest.raises(ConfigurationError, match="must start with 'gs://'"):
+                await generate_report(
+                    themefinder_output_path="bucket/blob",
+                    question="Q?",
+                    output_bucket="out",
+                    project="p",
+                    location="l",
                 )
 
 class TestIntegration:

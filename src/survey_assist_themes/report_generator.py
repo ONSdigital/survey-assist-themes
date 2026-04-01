@@ -146,11 +146,15 @@ async def generate_report(
     location: str,
 ) -> None:
     # Parse the GCS path
+    if not themefinder_output_path.startswith("gs://"):
+        raise ConfigurationError(
+            f"THEMEFINDER_OUTPUT_PATH must start with 'gs://', got: {themefinder_output_path!r}"
+        )
+    
     path = themefinder_output_path.removeprefix("gs://")
     if "/" not in path:
         raise ConfigurationError(
-            f"THEMEFINDER_OUTPUT_PATH must be in the form "
-            f"'gs://bucket/blob' or 'bucket/blob', got: {themefinder_output_path!r}"
+            f"THEMEFINDER_OUTPUT_PATH must be in the form 'gs://bucket/blob', got: {themefinder_output_path!r}"
         )
     input_bucket, blob_name = path.split("/", 1)
 
