@@ -134,7 +134,7 @@ class TestGetReportConfig:
                 get_report_config()
             assert "Failed to load report configuration" in str(exc_info.value)
 
-    def test_get_report_config_invalid_json(self) - > None:
+    def test_get_report_config_invalid_json(self) -> None:
         """Test error handling for invalid JSON."""
         invalid_json = "{ invalid json"
         
