@@ -114,7 +114,7 @@ async def _generate_single_report(
             )
         except Exception as e:
             logger.error(f"Report generation failed: {str(e)}")
-            raise ThemeFinderError(f"Model failed to generate report: {e}")
+            raise ThemeFinderError(f"Model failed to generate report: {e}") from e
 
         if not response.text:
             msg = "LLM response missing or empty"
@@ -125,7 +125,7 @@ async def _generate_single_report(
             report_text: str = response.text
         except Exception as e:
             logger.error(f"Failed to extract report text: {str(e)}")
-            raise ThemeFinderError(f"Failed to extract report text: {e}")
+            raise ThemeFinderError(f"Failed to extract report text: {e}") from e
         logger.info(f"Report generated ({len(report_text)} characters)")
 
         try:
@@ -137,7 +137,7 @@ async def _generate_single_report(
             logger.info(f"Report saved to gs://{config["output_bucket"]}/{prefix}.md")
         except Exception as e:
             logger.error(f"Failed to save report to GCS: {str(e)}")
-            raise GCSOperationError(f"Failed to save report to GCS: {e}")
+            raise GCSOperationError(f"Failed to save report to GCS: {e}") from e
 
 async def generate_report(
     themefinder_output_path: str,
