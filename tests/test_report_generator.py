@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from typing import Any
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
@@ -22,7 +23,7 @@ from survey_assist_themes.report_generator import (
 
 
 @pytest.fixture
-def base_config():
+def base_config() -> dict[str, Any]:
     """Fixture for common config used in multiple tests."""
     return {
         "model": MagicMock(spec=GenerativeModel),
@@ -35,7 +36,7 @@ def base_config():
     }
 
 @pytest.fixture
-def themefinder_result():
+def themefinder_result() -> dict[str, Any]:
     """Fixture for typical ThemeFinder output."""
     return {
         "themes": [{"topic_id": "A", "topic": "Theme A"}],
@@ -46,7 +47,7 @@ def themefinder_result():
     }
 
 @pytest.fixture
-def integration_themefinder_result():
+def integration_themefinder_result() -> dict[str, Any]:
     """Fixture for realistic ThemeFinder output for integration tests."""
     return {
         "themes": [
@@ -70,7 +71,7 @@ def integration_themefinder_result():
  
  
 @pytest.fixture
-def single_report_config():
+def single_report_config() -> dict[str, Any]:
     """Fixture for single report configuration."""
     return {
         "reports_config": [
@@ -85,7 +86,7 @@ def single_report_config():
     }
 
 @pytest.fixture
-def multiple_reports_config():
+def multiple_reports_config() -> dict[str, Any]:
     """Fixture for multiple report configurations."""
     return {
         "reports_config": [
@@ -107,7 +108,7 @@ def multiple_reports_config():
 class TestGetReportConfig:
     """Tests for get_report_config function."""
 
-    def test_get_report_config_success(self):
+    def test_get_report_config_success(self) -> None:
         """Test successfully loading report configuration."""
         config_data = {
             "reports_config": [
@@ -126,14 +127,14 @@ class TestGetReportConfig:
         assert result["reports_config"][0]["model"]["model_name"] == "gemini-2.5-flash"
         assert result["reports_config"][0]["model"]["temperature"] == 0.2
 
-    def test_get_report_config_file_not_found(self):
+    def test_get_report_config_file_not_found(self) -> None:
         """Test error handling when config file not found."""
         with patch("builtins.open", side_effect=FileNotFoundError("Config not found")):
             with pytest.raises(ConfigurationError) as exc_info:
                 get_report_config()
             assert "Failed to load report configuration" in str(exc_info.value)
 
-    def test_get_report_config_invalid_json(self):
+    def test_get_report_config_invalid_json(self) - > None:
         """Test error handling for invalid JSON."""
         invalid_json = "{ invalid json"
         
@@ -142,7 +143,7 @@ class TestGetReportConfig:
                 get_report_config()
             assert "Failed to load report configuration" in str(exc_info.value)
 
-    def test_get_multiple_report_configs(self):
+    def test_get_multiple_report_configs(self) -> None:
         """Test loading config file with multilpe report configs."""
         config_data = {
             "reports_config": [
@@ -168,7 +169,7 @@ class TestGetReportConfig:
         assert result["reports_config"][0]["title"] == "Summary"
         assert result["reports_config"][1]["title"] == "Detailed"
 
-    def test_get_report_config_missing_keys(self):
+    def test_get_report_config_missing_keys(self) -> None:
         """Test handling of missing expected keys in config."""
         config_data = {"unexpected_key": "value"}
         with patch("builtins.open", mock_open(read_data=json.dumps(config_data))):
@@ -179,7 +180,7 @@ class TestGetReportConfig:
 class TestGenerateReportStats:
     """Tests for generate_report_stats function."""
 
-    def test_generate_report_stats_basic(self):
+    def test_generate_report_stats_basic(self) -> None:
         """Test basic stats generation."""
         result = {
             "themes": [
@@ -215,7 +216,7 @@ class TestGenerateReportStats:
         assert "Sentiment breakdown: 1 Agreement, 1 Disagreement, 1 Unclear" in stats
         assert "Feedback depth: 2 evidence-rich responses vs 1 surface-level" in stats
 
-    def test_generate_report_stats_empty(self):
+    def test_generate_report_stats_empty(self) -> None:
         """Test stats with empty data."""
         result = {
             "themes": [],
@@ -231,7 +232,7 @@ class TestGenerateReportStats:
         assert "Total unprocessables: 0" in stats
         assert "Sentiment breakdown: 0 Agreement, 0 Disagreement, 0 Unclear" in stats
 
-    def test_generate_report_stats_no_divisions_by_zero(self):
+    def test_generate_report_stats_no_divisions_by_zero(self) -> None:
         """Test that stats handles zero responses without division errors."""
         result = {
             "themes": [{"topic_id": "A", "topic": "Theme"}],
@@ -244,7 +245,7 @@ class TestGenerateReportStats:
         stats = generate_report_stats(result)
         assert "Total responses processed: 0" in stats
 
-    def test_generate_report_stats_all_agreement(self):
+    def test_generate_report_stats_all_agreement(self) -> None:
         """Test stats when all sentiments are agreement."""
         result = {
             "themes": [{"topic_id": "A", "topic": "Theme A"}],
@@ -269,7 +270,7 @@ class TestGenerateReportStats:
 class TestGenerateSingleReport:
     """Tests for _generate_single_report async function."""
 
-    def test_generate_single_report_success(self, base_config):
+    def test_generate_single_report_success(self, base_config) -> None:
         """Test successful single report generation."""
 
         mock_response = MagicMock()
@@ -288,7 +289,7 @@ class TestGenerateSingleReport:
         assert "Executive_Summary" in call_args[1]["destination_blob_name"]
         assert call_args[1]["report"] == "Generated report content"
 
-    def test_generate_single_report_empty_response(self, base_config):
+    def test_generate_single_report_empty_response(self, base_config) -> None:
         """Test error handling when model returns empty response."""
 
         mock_response = MagicMock()
@@ -298,7 +299,7 @@ class TestGenerateSingleReport:
         with pytest.raises(ValueError, match="LLM response missing or empty"):
             asyncio.run(_generate_single_report(base_config))
 
-    def test_generate_single_report_model_error(self, base_config):
+    def test_generate_single_report_model_error(self, base_config) -> None:
         """Test error handling when model generation fails."""
 
         base_config["model"].generate_content.side_effect = Exception("API Error")
@@ -307,7 +308,7 @@ class TestGenerateSingleReport:
             asyncio.run(_generate_single_report(base_config))
 
     @pytest.mark.asyncio
-    async def test_generate_single_report_gcs_save_error(self, base_config):
+    async def test_generate_single_report_gcs_save_error(self, base_config) -> None:
         """Test error handling when GCS save fails."""
         mock_response = MagicMock()
         mock_response.text = "Valid content"
@@ -324,7 +325,7 @@ class TestGenerateSingleReport:
 class TestGenerateReport:
     """Tests for generate_report async function."""
  
-    def test_generate_report_single_config(self, themefinder_result, single_report_config):
+    def test_generate_report_single_config(self, themefinder_result, single_report_config) -> None:
         """Test report generation with single report config."""
         with patch(
             "survey_assist_themes.report_generator.load_themefinder_output_from_gcs"
@@ -358,7 +359,7 @@ class TestGenerateReport:
  
                             assert mock_generate.call_count == 1
  
-    def test_generate_report_multiple_configs(self, themefinder_result, multiple_reports_config):
+    def test_generate_report_multiple_configs(self, themefinder_result, multiple_reports_config) -> None:
         """Test report generation with multiple report configs."""
         with patch(
             "survey_assist_themes.report_generator.load_themefinder_output_from_gcs"
@@ -390,7 +391,7 @@ class TestGenerateReport:
  
                             assert mock_generate.call_count == 2
  
-    def test_generate_report_parses_gcs_path(self, themefinder_result, single_report_config):
+    def test_generate_report_parses_gcs_path(self, themefinder_result, single_report_config) -> None:
         """Test that GCS path is parsed correctly."""
         with patch(
             "survey_assist_themes.report_generator.load_themefinder_output_from_gcs"
@@ -423,7 +424,7 @@ class TestGenerateReport:
                             mock_load.assert_called_once_with("my-bucket", "path/to/output.json")
  
     @pytest.mark.asyncio
-    async def test_generate_report_invalid_gcs_path_no_slash(self):
+    async def test_generate_report_invalid_gcs_path_no_slash(self) -> None:
         """Test error handling for invalid GCS path without slash."""
         with patch("survey_assist_themes.report_generator.load_themefinder_output_from_gcs"):
             with pytest.raises(ConfigurationError, match="must be in the form"):
@@ -436,7 +437,7 @@ class TestGenerateReport:
                 )
  
     @pytest.mark.asyncio
-    async def test_generate_report_invalid_gcs_path_no_gs(self):
+    async def test_generate_report_invalid_gcs_path_no_gs(self) -> None:
         """Test error handling for GCS path without gs:// prefix."""
         with patch("survey_assist_themes.report_generator.load_themefinder_output_from_gcs"):
             with pytest.raises(ConfigurationError, match="must start with 'gs://'"):
@@ -453,7 +454,7 @@ class TestIntegration:
  
     def test_full_report_generation_workflow(
         self, integration_themefinder_result, single_report_config
-    ):
+    ) -> None:
         """Test complete report generation workflow with mocked dependencies."""
         with patch(
             "survey_assist_themes.report_generator.load_themefinder_output_from_gcs",
@@ -491,7 +492,7 @@ class TestIntegration:
  
     def test_full_workflow_with_multiple_themes(
         self, single_report_config
-    ):
+    ) -> None:
         """Test workflow handles multiple themes correctly."""
         themefinder_result = {
             "themes": [
@@ -552,7 +553,7 @@ class TestIntegration:
  
     def test_full_workflow_loads_correct_gcs_file(
         self, integration_themefinder_result, single_report_config
-    ):
+    ) -> None:
         """Test that workflow loads the correct file from GCS."""
         with patch(
             "survey_assist_themes.report_generator.load_themefinder_output_from_gcs",
@@ -588,7 +589,7 @@ class TestIntegration:
  
     def test_full_workflow_with_stats_enabled(
         self, integration_themefinder_result, single_report_config
-    ):
+    ) -> None:
         """Test workflow generates stats when enabled in config."""
         single_report_config["reports_config"][0]["add_stats"] = True
         with patch(
@@ -628,7 +629,7 @@ class TestIntegration:
  
     def test_full_workflow_passes_question_to_prompt(
         self, integration_themefinder_result, single_report_config
-    ):
+    ) -> None:
         """Test that the survey question is included in the prompt."""
         with patch(
             "survey_assist_themes.report_generator.load_themefinder_output_from_gcs",
@@ -668,7 +669,7 @@ class TestIntegration:
  
     def test_full_workflow_end_to_end(
         self, integration_themefinder_result, single_report_config
-    ):
+    ) -> None:
         """Test complete end-to-end workflow with all components."""
         with patch(
             "survey_assist_themes.report_generator.load_themefinder_output_from_gcs",
