@@ -1,5 +1,5 @@
 """
-This module generates markdown reports based on the output from the ThemeFinder pipeline. 
+This module generates markdown reports based on the output from the ThemeFinder pipeline.
 It reads the ThemeFinder output JSON from a specified GCS location, processes it,
 and uses a generative model to create reports summarising the themes identified in survey feedback.
 The report generation is configurable via a JSON config file, allowing for different prompts,
@@ -7,6 +7,7 @@ model settings, and report titles.
 Additional statistics about the themes and sentiments can also be included in the report
 based on the configuration. The generated reports are then saved back to GCS.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -31,23 +32,25 @@ from survey_assist_themes.utils.file_utils import (
 
 logger = get_logger(__name__)
 
+
 # Load report config, example config provided at src/survey_assist_themes/report_config.json.txt
 def get_report_config() -> dict[str, Any]:
     try:
         with open("src/survey_assist_themes/report_config.json", encoding="utf-8") as f:
-            config = json.load(f)
+            config: dict[str, Any] = json.load(f)
             logger.info("Report configuration loaded successfully.")
             if "reports_config" not in config:
                 raise KeyError("Missing required key 'reports_config' in configuration")
-            
+
             if not isinstance(config["reports_config"], list):
                 raise ValueError("'reports_config' must be a list")
-            
+
             if len(config["reports_config"]) == 0:
                 raise ValueError("'reports_config' cannot be empty")
             return config
     except Exception as e:
         raise ConfigurationError(f"Failed to load report configuration: {e}") from e
+
 
 def generate_report_stats(result: dict[str, Any]) -> str:
     themes = result.get("themes", [])
@@ -55,11 +58,11 @@ def generate_report_stats(result: dict[str, Any]) -> str:
     sentiment_data = result.get("sentiment", [])
     detail_data = result.get("detailed_responses", [])
     unprocessables = result.get("unprocessables", [])
-    
+
     total_responses = len(mapping)
     total_unprocessables = len(unprocessables)
 
-    theme_counts = {}
+    theme_counts: dict[str, int] = {}
     for m in mapping:
         for label in m.get("labels", []):
             theme_counts[label] = theme_counts.get(label, 0) + 1
@@ -98,46 +101,46 @@ def generate_report_stats(result: dict[str, Any]) -> str:
     )
     return stats_text
 
+
 async def _generate_single_report(
-        config: dict[str, Any],
-) -> str:
-        """Helper function to generate a single report asynchronously."""
-        contents = [Content(role="user", parts=[config["prompt_part"], config["json_part"]])]
-        title = config.get("title", "report")
-        prefix = f"{config["blob_name"].rsplit('.', 1)[0]}_{title.replace(' ', '_')}"
-        logger.info(f"Generating report '{title}'")
-        try:
-            response = await asyncio.to_thread(
-                config["model"].generate_content, 
-                contents, 
-                generation_config=config["model_config"]
-            )
-        except Exception as e:
-            logger.error(f"Report generation failed: {str(e)}")
-            raise ThemeFinderError(f"Model failed to generate report: {e}") from e
+    config: dict[str, Any],
+) -> None:
+    """Helper function to generate a single report asynchronously."""
+    contents = [Content(role="user", parts=[config["prompt_part"], config["json_part"]])]
+    title = config.get("title", "report")
+    prefix = f"{config["blob_name"].rsplit('.', 1)[0]}_{title.replace(' ', '_')}"
+    logger.info(f"Generating report '{title}'")
+    try:
+        response = await asyncio.to_thread(
+            config["model"].generate_content, contents, generation_config=config["model_config"]
+        )
+    except Exception as e:
+        logger.error(f"Report generation failed: {str(e)}")
+        raise ThemeFinderError(f"Model failed to generate report: {e}") from e
 
-        if not response.text:
-            msg = "LLM response missing or empty"
-            logger.error(msg)
-            raise ValueError(msg)
-        
-        try:
-            report_text: str = response.text
-        except Exception as e:
-            logger.error(f"Failed to extract report text: {str(e)}")
-            raise ThemeFinderError(f"Failed to extract report text: {e}") from e
-        logger.info(f"Report generated ({len(report_text)} characters)")
+    if not response.text:
+        msg = "LLM response missing or empty"
+        logger.error(msg)
+        raise ValueError(msg)
 
-        try:
-            save_markdown_report_to_gcs(
-                report=report_text,
-                bucket_name=config["output_bucket"],
-                destination_blob_name=prefix,
-            )
-            logger.info(f"Report saved to gs://{config["output_bucket"]}/{prefix}.md")
-        except Exception as e:
-            logger.error(f"Failed to save report to GCS: {str(e)}")
-            raise GCSOperationError(f"Failed to save report to GCS: {e}") from e
+    try:
+        report_text: str = response.text
+    except Exception as e:
+        logger.error(f"Failed to extract report text: {str(e)}")
+        raise ThemeFinderError(f"Failed to extract report text: {e}") from e
+    logger.info(f"Report generated ({len(report_text)} characters)")
+
+    try:
+        save_markdown_report_to_gcs(
+            report=report_text,
+            bucket_name=config["output_bucket"],
+            destination_blob_name=prefix,
+        )
+        logger.info(f"Report saved to gs://{config["output_bucket"]}/{prefix}.md")
+    except Exception as e:
+        logger.error(f"Failed to save report to GCS: {str(e)}")
+        raise GCSOperationError(f"Failed to save report to GCS: {e}") from e
+
 
 async def generate_report(
     themefinder_output_path: str,
@@ -151,7 +154,7 @@ async def generate_report(
         raise ConfigurationError(
             f"THEMEFINDER_OUTPUT_PATH must start with 'gs://', got: {themefinder_output_path!r}"
         )
-    
+
     path = themefinder_output_path.removeprefix("gs://")
     if "/" not in path:
         raise ConfigurationError(
@@ -170,17 +173,15 @@ async def generate_report(
     report_tasks = []
     # Iterate over report configs and produce task list
     for report_cfg in config.get("reports_config", []):
-
         model_cfg = report_cfg["model"]
         prompt_file_text = report_cfg["prompt_text"]
         system_instruction = report_cfg["system_instructions"]
 
         vertexai.init(project=project, location=location)
         model = GenerativeModel(
-            model_name=model_cfg["model_name"],
-            system_instruction=system_instruction
+            model_name=model_cfg["model_name"], system_instruction=system_instruction
         )
-        
+
         stats_text = None
         if report_cfg.get("add_stats", False):
             stats_text = generate_report_stats(result)
@@ -195,12 +196,10 @@ async def generate_report(
         logger.debug(f"{prompt_part}")
 
         generation_config = {
-            "model_config": {
-                "temperature": model_cfg.get("temperature", 0.2)
-            },
+            "model_config": {"temperature": model_cfg.get("temperature", 0.2)},
             "model": model,
             "title": report_cfg.get("title", "report"),
-            "blob_name": blob_name, # name of the themefinder output file
+            "blob_name": blob_name,  # name of the themefinder output file
             "prompt_part": prompt_part,
             "json_part": json_part,
             "output_bucket": output_bucket,
@@ -244,6 +243,7 @@ async def run() -> None:
         project=project,
         location=location,
     )
- 
+
+
 if __name__ == "__main__":
     asyncio.run(run())

@@ -335,7 +335,7 @@ def save_themefinder_output_to_gcs(
     except GoogleCloudError as e:
         logger.error(f"GCS operation failed: {e}", exc_info=True)
         raise GCSOperationError(f"Failed to save output to GCS: {e}") from e
-    
+
 
 @retry_with_backoff(
     max_attempts=3,
@@ -376,9 +376,8 @@ def load_themefinder_output_from_gcs(bucket_name: str, blob_name: str) -> dict[s
     try:
         return json.loads(raw)  # type: ignore[no-any-return]
     except json.JSONDecodeError as e:
-        raise ThemeFinderError(
-            f"Could not parse ThemeFinder output as JSON: {e}"
-        ) from e
+        raise ThemeFinderError(f"Could not parse ThemeFinder output as JSON: {e}") from e
+
 
 @retry_with_backoff(
     max_attempts=3,

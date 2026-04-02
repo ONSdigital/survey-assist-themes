@@ -1,4 +1,5 @@
 """Tests for report generator module"""
+
 from __future__ import annotations
 
 import asyncio
@@ -35,6 +36,7 @@ def base_config() -> dict[str, Any]:
         "output_bucket": "test-bucket",
     }
 
+
 @pytest.fixture
 def themefinder_result() -> dict[str, Any]:
     """Fixture for typical ThemeFinder output."""
@@ -45,6 +47,7 @@ def themefinder_result() -> dict[str, Any]:
         "detailed_responses": [{"evidence_rich": "YES"}],
         "unprocessables": [],
     }
+
 
 @pytest.fixture
 def integration_themefinder_result() -> dict[str, Any]:
@@ -68,8 +71,8 @@ def integration_themefinder_result() -> dict[str, Any]:
         ],
         "unprocessables": [],
     }
- 
- 
+
+
 @pytest.fixture
 def single_report_config() -> dict[str, Any]:
     """Fixture for single report configuration."""
@@ -84,6 +87,7 @@ def single_report_config() -> dict[str, Any]:
             }
         ]
     }
+
 
 @pytest.fixture
 def multiple_reports_config() -> dict[str, Any]:
@@ -105,6 +109,7 @@ def multiple_reports_config() -> dict[str, Any]:
         ]
     }
 
+
 class TestGetReportConfig:
     """Tests for get_report_config function."""
 
@@ -119,10 +124,10 @@ class TestGetReportConfig:
                 }
             ]
         }
-    
+
         with patch("builtins.open", mock_open(read_data=json.dumps(config_data))):
             result = get_report_config()
-    
+
         assert result == config_data
         assert result["reports_config"][0]["model"]["model_name"] == "gemini-2.5-flash"
         assert result["reports_config"][0]["model"]["temperature"] == 0.2
@@ -137,7 +142,7 @@ class TestGetReportConfig:
     def test_get_report_config_invalid_json(self) -> None:
         """Test error handling for invalid JSON."""
         invalid_json = "{ invalid json"
-        
+
         with patch("builtins.open", mock_open(read_data=invalid_json)):
             with pytest.raises(ConfigurationError) as exc_info:
                 get_report_config()
@@ -176,6 +181,7 @@ class TestGetReportConfig:
             with pytest.raises(ConfigurationError) as exc_info:
                 get_report_config()
             assert "Failed to load report configuration" in str(exc_info.value)
+
 
 class TestGenerateReportStats:
     """Tests for generate_report_stats function."""
@@ -218,7 +224,7 @@ class TestGenerateReportStats:
 
     def test_generate_report_stats_empty(self) -> None:
         """Test stats with empty data."""
-        result = {
+        result: dict[str, list[Any]] = {
             "themes": [],
             "mapping": [],
             "sentiment": [],
@@ -267,16 +273,17 @@ class TestGenerateReportStats:
         stats = generate_report_stats(result)
         assert "Sentiment breakdown: 2 Agreement, 0 Disagreement, 0 Unclear" in stats
 
+
 class TestGenerateSingleReport:
     """Tests for _generate_single_report async function."""
 
-    def test_generate_single_report_success(self, base_config) -> None:
+    def test_generate_single_report_success(self, base_config: dict[str, Any]) -> None:
         """Test successful single report generation."""
 
         mock_response = MagicMock()
         mock_response.text = "Generated report content"
         base_config["model"].generate_content.return_value = mock_response
- 
+
         with patch(
             "survey_assist_themes.report_generator.save_markdown_report_to_gcs"
         ) as mock_save:
@@ -284,31 +291,31 @@ class TestGenerateSingleReport:
 
         mock_save.assert_called_once()
         call_args = mock_save.call_args
- 
+
         assert call_args[1]["bucket_name"] == "test-bucket"
         assert "Executive_Summary" in call_args[1]["destination_blob_name"]
         assert call_args[1]["report"] == "Generated report content"
 
-    def test_generate_single_report_empty_response(self, base_config) -> None:
+    def test_generate_single_report_empty_response(self, base_config: dict[str, Any]) -> None:
         """Test error handling when model returns empty response."""
 
         mock_response = MagicMock()
         mock_response.text = ""
         base_config["model"].generate_content.return_value = mock_response
- 
+
         with pytest.raises(ValueError, match="LLM response missing or empty"):
             asyncio.run(_generate_single_report(base_config))
 
-    def test_generate_single_report_model_error(self, base_config) -> None:
+    def test_generate_single_report_model_error(self, base_config: dict[str, Any]) -> None:
         """Test error handling when model generation fails."""
 
         base_config["model"].generate_content.side_effect = Exception("API Error")
- 
+
         with pytest.raises(ThemeFinderError, match="Model failed to generate report"):
             asyncio.run(_generate_single_report(base_config))
 
     @pytest.mark.asyncio
-    async def test_generate_single_report_gcs_save_error(self, base_config) -> None:
+    async def test_generate_single_report_gcs_save_error(self, base_config: dict[str, Any]) -> None:
         """Test error handling when GCS save fails."""
         mock_response = MagicMock()
         mock_response.text = "Valid content"
@@ -322,29 +329,29 @@ class TestGenerateSingleReport:
                 with pytest.raises(GCSOperationError, match="Failed to save report to GCS"):
                     await _generate_single_report(base_config)
 
+
 class TestGenerateReport:
     """Tests for generate_report async function."""
- 
-    def test_generate_report_single_config(self, themefinder_result, single_report_config) -> None:
+
+    def test_generate_report_single_config(
+        self, themefinder_result: dict[str, Any], single_report_config: dict[str, Any]
+    ) -> None:
         """Test report generation with single report config."""
         with patch(
             "survey_assist_themes.report_generator.load_themefinder_output_from_gcs"
         ) as mock_load:
             mock_load.return_value = themefinder_result
- 
-            with patch(
-                "survey_assist_themes.report_generator.get_report_config"
-            ) as mock_config:
+
+            with patch("survey_assist_themes.report_generator.get_report_config") as mock_config:
                 mock_config.return_value = single_report_config
- 
+
                 with patch("vertexai.init"):
-                    with patch(
-                        "survey_assist_themes.report_generator.GenerativeModel"
-                    ):
+                    with patch("survey_assist_themes.report_generator.GenerativeModel"):
                         with patch(
                             "survey_assist_themes.report_generator._generate_single_report"
                         ) as mock_generate:
                             import asyncio
+
                             asyncio.run(
                                 generate_report(
                                     themefinder_output_path="gs://bucket/output.json",
@@ -354,31 +361,30 @@ class TestGenerateReport:
                                     location="europe-west2",
                                 )
                             )
- 
+
                             mock_load.assert_called_once_with("bucket", "output.json")
- 
+
                             assert mock_generate.call_count == 1
- 
-    def test_generate_report_multiple_configs(self, themefinder_result, multiple_reports_config) -> None:
+
+    def test_generate_report_multiple_configs(
+        self, themefinder_result: dict[str, Any], multiple_reports_config: dict[str, Any]
+    ) -> None:
         """Test report generation with multiple report configs."""
         with patch(
             "survey_assist_themes.report_generator.load_themefinder_output_from_gcs"
         ) as mock_load:
             mock_load.return_value = themefinder_result
- 
-            with patch(
-                "survey_assist_themes.report_generator.get_report_config"
-            ) as mock_config:
+
+            with patch("survey_assist_themes.report_generator.get_report_config") as mock_config:
                 mock_config.return_value = multiple_reports_config
- 
+
                 with patch("vertexai.init"):
-                    with patch(
-                        "survey_assist_themes.report_generator.GenerativeModel"
-                    ):
+                    with patch("survey_assist_themes.report_generator.GenerativeModel"):
                         with patch(
                             "survey_assist_themes.report_generator._generate_single_report"
                         ) as mock_generate:
                             import asyncio
+
                             asyncio.run(
                                 generate_report(
                                     themefinder_output_path="gs://bucket/output.json",
@@ -388,29 +394,26 @@ class TestGenerateReport:
                                     location="loc",
                                 )
                             )
- 
+
                             assert mock_generate.call_count == 2
- 
-    def test_generate_report_parses_gcs_path(self, themefinder_result, single_report_config) -> None:
+
+    def test_generate_report_parses_gcs_path(
+        self, themefinder_result: dict[str, Any], single_report_config: dict[str, Any]
+    ) -> None:
         """Test that GCS path is parsed correctly."""
         with patch(
             "survey_assist_themes.report_generator.load_themefinder_output_from_gcs"
         ) as mock_load:
             mock_load.return_value = themefinder_result
- 
-            with patch(
-                "survey_assist_themes.report_generator.get_report_config"
-            ) as mock_config:
+
+            with patch("survey_assist_themes.report_generator.get_report_config") as mock_config:
                 mock_config.return_value = single_report_config
- 
+
                 with patch("vertexai.init"):
-                    with patch(
-                        "survey_assist_themes.report_generator.GenerativeModel"
-                    ):
-                        with patch(
-                            "survey_assist_themes.report_generator._generate_single_report"
-                        ):
+                    with patch("survey_assist_themes.report_generator.GenerativeModel"):
+                        with patch("survey_assist_themes.report_generator._generate_single_report"):
                             import asyncio
+
                             asyncio.run(
                                 generate_report(
                                     themefinder_output_path="gs://my-bucket/path/to/output.json",
@@ -420,9 +423,9 @@ class TestGenerateReport:
                                     location="loc",
                                 )
                             )
- 
+
                             mock_load.assert_called_once_with("my-bucket", "path/to/output.json")
- 
+
     @pytest.mark.asyncio
     async def test_generate_report_invalid_gcs_path_no_slash(self) -> None:
         """Test error handling for invalid GCS path without slash."""
@@ -435,7 +438,7 @@ class TestGenerateReport:
                     project="p",
                     location="l",
                 )
- 
+
     @pytest.mark.asyncio
     async def test_generate_report_invalid_gcs_path_no_gs(self) -> None:
         """Test error handling for GCS path without gs:// prefix."""
@@ -449,31 +452,28 @@ class TestGenerateReport:
                     location="l",
                 )
 
+
 class TestIntegration:
     """Integration tests for full workflow."""
- 
+
     def test_full_report_generation_workflow(
-        self, integration_themefinder_result, single_report_config
+        self, integration_themefinder_result: dict[str, Any], single_report_config: dict[str, Any]
     ) -> None:
         """Test complete report generation workflow with mocked dependencies."""
         with patch(
             "survey_assist_themes.report_generator.load_themefinder_output_from_gcs",
             return_value=integration_themefinder_result,
         ):
-            with patch(
-                "survey_assist_themes.report_generator.get_report_config"
-            ) as mock_config:
+            with patch("survey_assist_themes.report_generator.get_report_config") as mock_config:
                 mock_config.return_value = single_report_config
- 
+
                 with patch("vertexai.init"):
-                    with patch(
-                        "survey_assist_themes.report_generator.GenerativeModel"
-                    ):
+                    with patch("survey_assist_themes.report_generator.GenerativeModel"):
                         with patch(
                             "survey_assist_themes.report_generator._generate_single_report"
                         ) as mock_generate:
                             import asyncio
- 
+
                             asyncio.run(
                                 generate_report(
                                     themefinder_output_path="gs://input/output.json",
@@ -483,16 +483,14 @@ class TestIntegration:
                                     location="europe-west2",
                                 )
                             )
- 
+
                             assert mock_generate.call_count == 1
- 
+
                             call_config = mock_generate.call_args[1]["config"]
                             assert call_config["output_bucket"] == "output-bucket"
                             assert call_config["title"] == "Executive Summary"
- 
-    def test_full_workflow_with_multiple_themes(
-        self, single_report_config
-    ) -> None:
+
+    def test_full_workflow_with_multiple_themes(self, single_report_config: dict[str, Any]) -> None:
         """Test workflow handles multiple themes correctly."""
         themefinder_result = {
             "themes": [
@@ -520,25 +518,21 @@ class TestIntegration:
             ],
             "unprocessables": [],
         }
- 
+
         with patch(
             "survey_assist_themes.report_generator.load_themefinder_output_from_gcs",
             return_value=themefinder_result,
         ):
-            with patch(
-                "survey_assist_themes.report_generator.get_report_config"
-            ) as mock_config:
+            with patch("survey_assist_themes.report_generator.get_report_config") as mock_config:
                 mock_config.return_value = single_report_config
- 
+
                 with patch("vertexai.init"):
-                    with patch(
-                        "survey_assist_themes.report_generator.GenerativeModel"
-                    ):
+                    with patch("survey_assist_themes.report_generator.GenerativeModel"):
                         with patch(
                             "survey_assist_themes.report_generator._generate_single_report"
                         ) as mock_generate:
                             import asyncio
- 
+
                             asyncio.run(
                                 generate_report(
                                     themefinder_output_path="gs://input/themes.json",
@@ -548,31 +542,25 @@ class TestIntegration:
                                     location="europe-west2",
                                 )
                             )
- 
+
                             assert mock_generate.call_count == 1
- 
+
     def test_full_workflow_loads_correct_gcs_file(
-        self, integration_themefinder_result, single_report_config
+        self, integration_themefinder_result: dict[str, Any], single_report_config: dict[str, Any]
     ) -> None:
         """Test that workflow loads the correct file from GCS."""
         with patch(
             "survey_assist_themes.report_generator.load_themefinder_output_from_gcs",
             return_value=integration_themefinder_result,
         ) as mock_load:
-            with patch(
-                "survey_assist_themes.report_generator.get_report_config"
-            ) as mock_config:
+            with patch("survey_assist_themes.report_generator.get_report_config") as mock_config:
                 mock_config.return_value = single_report_config
- 
+
                 with patch("vertexai.init"):
-                    with patch(
-                        "survey_assist_themes.report_generator.GenerativeModel"
-                    ):
-                        with patch(
-                            "survey_assist_themes.report_generator._generate_single_report"
-                        ):
+                    with patch("survey_assist_themes.report_generator.GenerativeModel"):
+                        with patch("survey_assist_themes.report_generator._generate_single_report"):
                             import asyncio
- 
+
                             asyncio.run(
                                 generate_report(
                                     themefinder_output_path="gs://my-input-bucket/survey/results.json",
@@ -582,13 +570,13 @@ class TestIntegration:
                                     location="us-central1",
                                 )
                             )
- 
+
                             mock_load.assert_called_once_with(
                                 "my-input-bucket", "survey/results.json"
                             )
- 
+
     def test_full_workflow_with_stats_enabled(
-        self, integration_themefinder_result, single_report_config
+        self, integration_themefinder_result: dict[str, Any], single_report_config: dict[str, Any]
     ) -> None:
         """Test workflow generates stats when enabled in config."""
         single_report_config["reports_config"][0]["add_stats"] = True
@@ -596,25 +584,21 @@ class TestIntegration:
             "survey_assist_themes.report_generator.load_themefinder_output_from_gcs",
             return_value=integration_themefinder_result,
         ):
-            with patch(
-                "survey_assist_themes.report_generator.get_report_config"
-            ) as mock_config:
+            with patch("survey_assist_themes.report_generator.get_report_config") as mock_config:
                 mock_config.return_value = single_report_config
- 
+
                 with patch(
                     "survey_assist_themes.report_generator.generate_report_stats"
                 ) as mock_stats:
                     mock_stats.return_value = "Statistics summary"
- 
+
                     with patch("vertexai.init"):
-                        with patch(
-                            "survey_assist_themes.report_generator.GenerativeModel"
-                        ):
+                        with patch("survey_assist_themes.report_generator.GenerativeModel"):
                             with patch(
                                 "survey_assist_themes.report_generator._generate_single_report"
                             ):
                                 import asyncio
- 
+
                                 asyncio.run(
                                     generate_report(
                                         themefinder_output_path="gs://input/output.json",
@@ -624,33 +608,29 @@ class TestIntegration:
                                         location="europe-west2",
                                     )
                                 )
- 
+
                                 assert mock_stats.called
- 
+
     def test_full_workflow_passes_question_to_prompt(
-        self, integration_themefinder_result, single_report_config
+        self, integration_themefinder_result: dict[str, Any], single_report_config: dict[str, Any]
     ) -> None:
         """Test that the survey question is included in the prompt."""
         with patch(
             "survey_assist_themes.report_generator.load_themefinder_output_from_gcs",
             return_value=integration_themefinder_result,
         ):
-            with patch(
-                "survey_assist_themes.report_generator.get_report_config"
-            ) as mock_config:
+            with patch("survey_assist_themes.report_generator.get_report_config") as mock_config:
                 mock_config.return_value = single_report_config
- 
+
                 with patch("vertexai.init"):
-                    with patch(
-                        "survey_assist_themes.report_generator.GenerativeModel"
-                    ):
+                    with patch("survey_assist_themes.report_generator.GenerativeModel"):
                         with patch(
                             "survey_assist_themes.report_generator._generate_single_report"
                         ) as mock_generate:
                             import asyncio
- 
+
                             survey_question = "What is your overall satisfaction?"
- 
+
                             asyncio.run(
                                 generate_report(
                                     themefinder_output_path="gs://input/output.json",
@@ -660,15 +640,15 @@ class TestIntegration:
                                     location="europe-west2",
                                 )
                             )
- 
+
                             assert mock_generate.called
- 
+
                             call_config = mock_generate.call_args[1]["config"]
                             prompt_text = call_config["prompt_part"]
                             assert survey_question in str(prompt_text)
- 
+
     def test_full_workflow_end_to_end(
-        self, integration_themefinder_result, single_report_config
+        self, integration_themefinder_result: dict[str, Any], single_report_config: dict[str, Any]
     ) -> None:
         """Test complete end-to-end workflow with all components."""
         with patch(
@@ -679,7 +659,7 @@ class TestIntegration:
                 "survey_assist_themes.report_generator.get_report_config"
             ) as mock_get_config:
                 mock_get_config.return_value = single_report_config
- 
+
                 with patch("vertexai.init") as mock_init:
                     with patch(
                         "survey_assist_themes.report_generator.GenerativeModel"
@@ -688,7 +668,7 @@ class TestIntegration:
                             "survey_assist_themes.report_generator._generate_single_report"
                         ) as mock_generate:
                             import asyncio
- 
+
                             asyncio.run(
                                 generate_report(
                                     themefinder_output_path="gs://input/output.json",
@@ -698,7 +678,7 @@ class TestIntegration:
                                     location="europe-west2",
                                 )
                             )
- 
+
                             mock_load.assert_called_once_with("input", "output.json")
                             mock_get_config.assert_called_once()
                             mock_init.assert_called_once_with(
