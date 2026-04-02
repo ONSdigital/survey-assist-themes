@@ -95,7 +95,7 @@ def generate_report_stats(result: dict[str, Any]) -> str:
         f"Responses mapped to multiple themes: {multi_theme_count}\n\n"
         f"**Sentiment & Detail:**\n"
         f"Sentiment: {pos_count} Agreement, {neg_count} Disagreement, {unclear_count} Unclear.\n"
-        f"Feedback: {rich_count} evidence-rich, {non_rich_count} surface-level responses.\n\n"
+        f"Depth: {rich_count} evidence-rich, {non_rich_count} surface-level responses.\n\n"
         "Please provide a high-level summary that is accessible to non-data scientists, "
         "referring to specific examples from the JSON data to support the themes."
     )

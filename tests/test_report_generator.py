@@ -219,8 +219,8 @@ class TestGenerateReportStats:
         assert "[B] Theme B | Count: 1 (33.3%)" in stats
         assert "Responses not mapped to any theme: 1 (33.3%)" in stats
         assert "Responses mapped to multiple themes: 1" in stats
-        assert "Sentiment breakdown: 1 Agreement, 1 Disagreement, 1 Unclear" in stats
-        assert "Feedback depth: 2 evidence-rich responses vs 1 surface-level" in stats
+        assert "Sentiment: 1 Agreement, 1 Disagreement, 1 Unclear" in stats
+        assert "Depth: 2 evidence-rich, 1 surface-level" in stats
 
     def test_generate_report_stats_empty(self) -> None:
         """Test stats with empty data."""
@@ -236,7 +236,7 @@ class TestGenerateReportStats:
 
         assert "Total responses processed: 0" in stats
         assert "Total unprocessables: 0" in stats
-        assert "Sentiment breakdown: 0 Agreement, 0 Disagreement, 0 Unclear" in stats
+        assert "Sentiment: 0 Agreement, 0 Disagreement, 0 Unclear" in stats
 
     def test_generate_report_stats_no_divisions_by_zero(self) -> None:
         """Test that stats handles zero responses without division errors."""
@@ -271,7 +271,7 @@ class TestGenerateReportStats:
         }
 
         stats = generate_report_stats(result)
-        assert "Sentiment breakdown: 2 Agreement, 0 Disagreement, 0 Unclear" in stats
+        assert "Sentiment: 2 Agreement, 0 Disagreement, 0 Unclear" in stats
 
 
 class TestGenerateSingleReport:
