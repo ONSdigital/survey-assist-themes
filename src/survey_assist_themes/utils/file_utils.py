@@ -18,7 +18,11 @@ from google.cloud import storage
 from google.cloud.exceptions import GoogleCloudError
 from survey_assist_utils.logging import get_logger
 
-from survey_assist_themes.exceptions import DataProcessingError, GCSOperationError, ThemeFinderError
+from survey_assist_themes.exceptions import (
+    DataProcessingError,
+    GCSOperationError,
+    ThemeFinderError,
+)
 from survey_assist_themes.utils.retry import retry_with_backoff
 
 logger = get_logger(__name__)
@@ -416,7 +420,8 @@ def save_markdown_report_to_gcs(
     if ensure_md_extension and not destination_blob_name.lower().endswith(".md"):
         destination_blob_name = destination_blob_name + ".md"
 
-    logger.debug(f"Saving markdown report to GCS: bucket={bucket_name}, blob={destination_blob_name}")
+    logger.debug(f"Saving markdown report to GCS: bucket={bucket_name}, \
+                 blob={destination_blob_name}")
     try:
         client = storage.Client()
         bucket = client.bucket(bucket_name)

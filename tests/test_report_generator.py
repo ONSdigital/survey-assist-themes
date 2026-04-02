@@ -3,19 +3,23 @@ from __future__ import annotations
 
 import asyncio
 import json
-from unittest.mock import AsyncMock, MagicMock, mock_open, patch, call
-from datetime import UTC, datetime
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
-from vertexai.generative_models import GenerativeModel, Part, Content
+from vertexai.generative_models import GenerativeModel, Part
 
+from survey_assist_themes.exceptions import (
+    ConfigurationError,
+    GCSOperationError,
+    ThemeFinderError,
+)
 from survey_assist_themes.report_generator import (
-    get_report_config,
-    generate_report_stats,
     _generate_single_report,
     generate_report,
+    generate_report_stats,
+    get_report_config,
 )
-from survey_assist_themes.exceptions import ConfigurationError, GCSOperationError, ThemeFinderError
+
 
 @pytest.fixture
 def base_config():
@@ -386,7 +390,7 @@ class TestGenerateReport:
  
                             assert mock_generate.call_count == 2
  
-    def test_generate_report_parses_gcs_path_correctly(self, themefinder_result, single_report_config):
+    def test_generate_report_parses_gcs_path(self, themefinder_result, single_report_config):
         """Test that GCS path is parsed correctly."""
         with patch(
             "survey_assist_themes.report_generator.load_themefinder_output_from_gcs"

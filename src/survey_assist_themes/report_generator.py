@@ -2,30 +2,31 @@
 This module generates markdown reports based on the output from the ThemeFinder pipeline. 
 It reads the ThemeFinder output JSON from a specified GCS location, processes it,
 and uses a generative model to create reports summarising the themes identified in survey feedback.
-The report generation is configurable via a JSON config file, allowing for different prompts, model settings, and report titles.
-Additional statistics about the themes and sentiments can also be included in the report based on the configuration.
-The generated reports are then saved back to GCS.
+The report generation is configurable via a JSON config file, allowing for different prompts,
+model settings, and report titles.
+Additional statistics about the themes and sentiments can also be included in the report
+based on the configuration. The generated reports are then saved back to GCS.
 """
 from __future__ import annotations
 
 import asyncio
-import base64
-from datetime import UTC, datetime
 import json
 import os
 from typing import Any
 
-from dotenv import load_dotenv
-from google.cloud import storage  # type: ignore[import]
 import vertexai
-from vertexai.generative_models import GenerativeModel, Part, Content
-
+from dotenv import load_dotenv
 from survey_assist_utils.logging import get_logger
+from vertexai.generative_models import Content, GenerativeModel, Part
 
-from survey_assist_themes.exceptions import ConfigurationError, GCSOperationError, ThemeFinderError
+from survey_assist_themes.exceptions import (
+    ConfigurationError,
+    GCSOperationError,
+    ThemeFinderError,
+)
 from survey_assist_themes.utils.file_utils import (
-    save_markdown_report_to_gcs,
     load_themefinder_output_from_gcs,
+    save_markdown_report_to_gcs,
 )
 
 logger = get_logger(__name__)
@@ -33,7 +34,7 @@ logger = get_logger(__name__)
 # Load report config, example config provided at src/survey_assist_themes/report_config.json.txt
 def get_report_config() -> dict[str, Any]:
     try:
-        with open("src/survey_assist_themes/report_config.json", "r", encoding="utf-8") as f:
+        with open("src/survey_assist_themes/report_config.json", encoding="utf-8") as f:
             config = json.load(f)
             logger.info("Report configuration loaded successfully.")
             if "reports_config" not in config:
@@ -90,8 +91,8 @@ def generate_report_stats(result: dict[str, Any]) -> str:
         f"Responses not mapped to any theme: {no_theme_count} ({no_theme_count_pct:.1f}%)\n"
         f"Responses mapped to multiple themes: {multi_theme_count}\n\n"
         f"**Sentiment & Detail:**\n"
-        f"Sentiment breakdown: {pos_count} Agreement, {neg_count} Disagreement, {unclear_count} Unclear.\n"
-        f"Feedback depth: {rich_count} evidence-rich responses vs {non_rich_count} surface-level responses.\n\n"
+        f"Sentiment: {pos_count} Agreement, {neg_count} Disagreement, {unclear_count} Unclear.\n"
+        f"Feedback: {rich_count} evidence-rich, {non_rich_count} surface-level responses.\n\n"
         "Please provide a high-level summary that is accessible to non-data scientists, "
         "referring to specific examples from the JSON data to support the themes."
     )
@@ -154,7 +155,8 @@ async def generate_report(
     path = themefinder_output_path.removeprefix("gs://")
     if "/" not in path:
         raise ConfigurationError(
-            f"THEMEFINDER_OUTPUT_PATH must be in the form 'gs://bucket/blob', got: {themefinder_output_path!r}"
+            f"THEMEFINDER_OUTPUT_PATH must be in the form 'gs://bucket/blob', \
+              got: {themefinder_output_path!r}"
         )
     input_bucket, blob_name = path.split("/", 1)
 
@@ -187,7 +189,8 @@ async def generate_report(
             f"{prompt_file_text}\n\n"
             f"Survey question: **{question}**\n\n"
             "The ThemeFinder output JSON is attached as a document below. "
-            f"{'Here are some statistics about the responses:\n\n' + stats_text if stats_text else ''}"
+            f"{'Here are some statistics about the responses:\n\n' \
+             + stats_text if stats_text else ''}"
         )
         logger.debug(f"{prompt_part}")
 
