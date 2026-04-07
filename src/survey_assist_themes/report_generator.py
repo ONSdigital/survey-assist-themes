@@ -318,6 +318,11 @@ async def run() -> None:
     logger.info("Starting report generator pipeline")
     load_dotenv()
 
+    generate_report_flag = os.getenv("GENERATE_REPORTS", "true").lower() == "true"
+    if not generate_report_flag:
+        logger.info("Report generation is disabled via GENERATE_REPORTS flag. Exiting.")
+        return
+
     question = os.getenv("QUESTION", "Do you have any other feedback about this survey?")
     output_bucket = os.getenv("OUTPUT_BUCKET")
     themefinder_output_path = os.getenv("THEMEFINDER_OUTPUT_PATH")
