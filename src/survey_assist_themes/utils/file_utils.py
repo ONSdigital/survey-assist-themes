@@ -343,8 +343,8 @@ def save_themefinder_output_to_gcs(
     backoff_factor=2.0,
     exceptions=(GoogleCloudError, IOError),
 )
-def load_themefinder_output_from_gcs(bucket_name: str, blob_name: str) -> dict[str, Any]:
-    """Load ThemeFinder output JSON from a Google Cloud Storage blob.
+def load_json_from_gcs(bucket_name: str, blob_name: str) -> dict[str, Any]:
+    """Load JSON from a Google Cloud Storage blob.
 
     Reads a JSON file stored in GCS and returns the parsed dictionary. The
     blob name may include folder-like prefixes (for example
@@ -367,16 +367,16 @@ def load_themefinder_output_from_gcs(bucket_name: str, blob_name: str) -> dict[s
         bucket = client.bucket(bucket_name)
         blob = bucket.blob(blob_name)
         raw = blob.download_as_text()
-        logger.info(f"Loaded ThemeFinder output from gs://{bucket_name}/{blob_name}")
+        logger.info(f"Loaded JSON from gs://{bucket_name}/{blob_name}")
     except Exception as e:
         raise GCSOperationError(
-            f"Failed to load ThemeFinder output from gs://{bucket_name}/{blob_name}: {e}"
+            f"Failed to load JSON from gs://{bucket_name}/{blob_name}: {e}"
         ) from e
 
     try:
         return json.loads(raw)  # type: ignore[no-any-return]
     except json.JSONDecodeError as e:
-        raise ThemeFinderError(f"Could not parse ThemeFinder output as JSON: {e}") from e
+        raise ThemeFinderError(f"Could not parse JSON: {e}") from e
 
 
 @retry_with_backoff(

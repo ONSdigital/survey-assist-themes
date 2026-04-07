@@ -26,7 +26,7 @@ from survey_assist_themes.exceptions import (
     ThemeFinderError,
 )
 from survey_assist_themes.utils.file_utils import (
-    load_themefinder_output_from_gcs,
+    load_json_from_gcs,
     save_markdown_report_to_gcs,
 )
 
@@ -34,19 +34,19 @@ logger = get_logger(__name__)
 
 
 # Load report config, example config provided at src/survey_assist_themes/report_config.json.txt
-def get_report_config() -> dict[str, Any]:
-    """#TODO; rework this to load config from GCS. & update docstring
+def get_report_config(config_path: str) -> dict[str, Any]:
+    """
     Load and validate the report configuration from the project's JSON file.
 
-    This function opens and parses the JSON file at
-    "src/survey_assist_themes/report_config.json". It validates that the top-level
+    This function opens and parses the JSON file from GCS specified by
+    "config_path". It validates that the top-level
     mapping contains a key "reports_config" whose value is a non-empty list, where each item
     in the list represents a separate report configuration. Each configuration
     specifies the report title, prompt text, system instructions, model settings,
     and whether to include statistics in the prompt.
 
     Args:
-        None
+        config_path (str): The path to the report configuration JSON file.
 
     Returns:
         dict[str, Any]: Parsed configuration mapping from the JSON file.
@@ -56,19 +56,31 @@ def get_report_config() -> dict[str, Any]:
             "reports_config" key is missing, or if "reports_config" is not a non-empty list.
             The underlying exception is chained to this error for debugging.
     """
+    #TODO: move this validation within the file util function
+    if not config_path.startswith("gs://"):
+        raise ConfigurationError(
+            f"REPORT_CONFIG_PATH must start with 'gs://', got: {config_path!r}"
+        )
+
+    path = config_path.removeprefix("gs://")
+    if "/" not in path:
+        raise ConfigurationError(
+            f"REPORT_CONFIG_PATH must be in the form 'gs://bucket/blob', \
+              got: {config_path!r}"
+        )
+    input_bucket, blob_name = path.split("/", 1)
     try:
-        with open("src/survey_assist_themes/report_config.json", encoding="utf-8") as f:
-            config: dict[str, Any] = json.load(f)
-            logger.info("Report configuration loaded successfully.")
-            if "reports_config" not in config:
-                raise KeyError("Missing required key 'reports_config' in configuration")
+        config = load_json_from_gcs(input_bucket, blob_name)
+        logger.info("Report configuration loaded successfully.")
+        if "reports_config" not in config:
+            raise KeyError("Missing required key 'reports_config' in configuration")
 
-            if not isinstance(config["reports_config"], list):
-                raise ValueError("'reports_config' must be a list")
+        if not isinstance(config["reports_config"], list):
+            raise ValueError("'reports_config' must be a list")
 
-            if len(config["reports_config"]) == 0:
-                raise ValueError("'reports_config' cannot be empty")
-            return config
+        if len(config["reports_config"]) == 0:
+            raise ValueError("'reports_config' cannot be empty")
+        return config
     except Exception as e:
         raise ConfigurationError(f"Failed to load report configuration: {e}") from e
 
@@ -209,6 +221,7 @@ async def generate_reports(
     output_bucket: str,
     project: str,
     location: str,
+    config_path: str,
 ) -> None:
     """Main function to generate multiple reports based on ThemeFinder output.
 
@@ -230,6 +243,7 @@ async def generate_reports(
             saved.
         project (str): The GCP project ID to use for Vertex AI operations.
         location (str): The GCP location to use for Vertex AI operations.
+        config_path (str): The GCS path to the report configuration JSON file.
     Returns:
         None
     Raises:
@@ -253,12 +267,12 @@ async def generate_reports(
     input_bucket, blob_name = path.split("/", 1)
 
     # load themefinder output json
-    result = load_themefinder_output_from_gcs(input_bucket, blob_name)
+    result = load_json_from_gcs(input_bucket, blob_name)
     json_bytes = json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8")
     json_part = Part.from_data(data=json_bytes, mime_type="text/plain")
     stats_text = generate_report_stats(result)
 
-    config = get_report_config()
+    config = get_report_config(config_path=config_path)
 
     report_tasks = []
     # Iterate over report configs and produce task list
@@ -331,6 +345,7 @@ async def run() -> None:
     themefinder_output_path = os.getenv("THEMEFINDER_OUTPUT_PATH")
     project = os.getenv("GCP_PROJECT")
     location = os.getenv("GCP_LOCATION", "europe-west2")
+    config_path = os.getenv("REPORT_CONFIG_PATH")
 
     if not output_bucket or not themefinder_output_path or not project:
         msg = (
@@ -349,6 +364,7 @@ async def run() -> None:
         output_bucket=output_bucket,
         project=project,
         location=location,
+        config_path=config_path,
     )
 
 
