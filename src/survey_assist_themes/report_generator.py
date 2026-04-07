@@ -183,6 +183,10 @@ async def generate_reports(
             model_name=model_cfg["model_name"], system_instruction=system_instruction
         )
 
+        if not stats_text and report_cfg.get("add_stats", False):
+            logger.warning(
+                "Report config requests stats to be added to the prompt, but no stats were generated."
+            )
 
         prompt_part = Part.from_text(
             f"{prompt_file_text}\n\n"
