@@ -17,8 +17,8 @@ from survey_assist_themes.exceptions import (
 )
 from survey_assist_themes.report_generator import (
     _generate_single_report,
-    generate_reports,
     generate_report_stats,
+    generate_reports,
     get_report_config,
 )
 
