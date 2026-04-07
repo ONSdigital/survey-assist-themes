@@ -17,7 +17,7 @@ from survey_assist_themes.exceptions import (
 )
 from survey_assist_themes.report_generator import (
     _generate_single_report,
-    generate_report,
+    generate_reports,
     generate_report_stats,
     get_report_config,
 )
@@ -331,7 +331,7 @@ class TestGenerateSingleReport:
 
 
 class TestGenerateReport:
-    """Tests for generate_report async function."""
+    """Tests for generate_reports async function."""
 
     def test_generate_report_single_config(
         self, themefinder_result: dict[str, Any], single_report_config: dict[str, Any]
@@ -353,7 +353,7 @@ class TestGenerateReport:
                             import asyncio
 
                             asyncio.run(
-                                generate_report(
+                                generate_reports(
                                     themefinder_output_path="gs://bucket/output.json",
                                     question="Test question?",
                                     output_bucket="output-bucket",
@@ -366,7 +366,7 @@ class TestGenerateReport:
 
                             assert mock_generate.call_count == 1
 
-    def test_generate_report_multiple_configs(
+    def test_generate_reports_multiple_configs(
         self, themefinder_result: dict[str, Any], multiple_reports_config: dict[str, Any]
     ) -> None:
         """Test report generation with multiple report configs."""
@@ -386,7 +386,7 @@ class TestGenerateReport:
                             import asyncio
 
                             asyncio.run(
-                                generate_report(
+                                generate_reports(
                                     themefinder_output_path="gs://bucket/output.json",
                                     question="Test?",
                                     output_bucket="output",
@@ -397,7 +397,7 @@ class TestGenerateReport:
 
                             assert mock_generate.call_count == 2
 
-    def test_generate_report_parses_gcs_path(
+    def test_generate_reports_parses_gcs_path(
         self, themefinder_result: dict[str, Any], single_report_config: dict[str, Any]
     ) -> None:
         """Test that GCS path is parsed correctly."""
@@ -415,7 +415,7 @@ class TestGenerateReport:
                             import asyncio
 
                             asyncio.run(
-                                generate_report(
+                                generate_reports(
                                     themefinder_output_path="gs://my-bucket/path/to/output.json",
                                     question="Question?",
                                     output_bucket="output",
@@ -427,11 +427,11 @@ class TestGenerateReport:
                             mock_load.assert_called_once_with("my-bucket", "path/to/output.json")
 
     @pytest.mark.asyncio
-    async def test_generate_report_invalid_gcs_path_no_slash(self) -> None:
+    async def test_generate_reports_invalid_gcs_path_no_slash(self) -> None:
         """Test error handling for invalid GCS path without slash."""
         with patch("survey_assist_themes.report_generator.load_themefinder_output_from_gcs"):
             with pytest.raises(ConfigurationError, match="must be in the form"):
-                await generate_report(
+                await generate_reports(
                     themefinder_output_path="gs://bucket",
                     question="Q?",
                     output_bucket="out",
@@ -440,11 +440,11 @@ class TestGenerateReport:
                 )
 
     @pytest.mark.asyncio
-    async def test_generate_report_invalid_gcs_path_no_gs(self) -> None:
+    async def test_generate_reports_invalid_gcs_path_no_gs(self) -> None:
         """Test error handling for GCS path without gs:// prefix."""
         with patch("survey_assist_themes.report_generator.load_themefinder_output_from_gcs"):
             with pytest.raises(ConfigurationError, match="must start with 'gs://'"):
-                await generate_report(
+                await generate_reports(
                     themefinder_output_path="bucket/blob",
                     question="Q?",
                     output_bucket="out",
@@ -475,7 +475,7 @@ class TestIntegration:
                             import asyncio
 
                             asyncio.run(
-                                generate_report(
+                                generate_reports(
                                     themefinder_output_path="gs://input/output.json",
                                     question="Feedback?",
                                     output_bucket="output-bucket",
@@ -534,7 +534,7 @@ class TestIntegration:
                             import asyncio
 
                             asyncio.run(
-                                generate_report(
+                                generate_reports(
                                     themefinder_output_path="gs://input/themes.json",
                                     question="Feedback?",
                                     output_bucket="output-bucket",
@@ -562,7 +562,7 @@ class TestIntegration:
                             import asyncio
 
                             asyncio.run(
-                                generate_report(
+                                generate_reports(
                                     themefinder_output_path="gs://my-input-bucket/survey/results.json",
                                     question="Any feedback?",
                                     output_bucket="my-output-bucket",
@@ -600,7 +600,7 @@ class TestIntegration:
                                 import asyncio
 
                                 asyncio.run(
-                                    generate_report(
+                                    generate_reports(
                                         themefinder_output_path="gs://input/output.json",
                                         question="Feedback?",
                                         output_bucket="output-bucket",
@@ -632,7 +632,7 @@ class TestIntegration:
                             survey_question = "What is your overall satisfaction?"
 
                             asyncio.run(
-                                generate_report(
+                                generate_reports(
                                     themefinder_output_path="gs://input/output.json",
                                     question=survey_question,
                                     output_bucket="output-bucket",
@@ -670,7 +670,7 @@ class TestIntegration:
                             import asyncio
 
                             asyncio.run(
-                                generate_report(
+                                generate_reports(
                                     themefinder_output_path="gs://input/output.json",
                                     question="Feedback?",
                                     output_bucket="output-bucket",

@@ -142,7 +142,7 @@ async def _generate_single_report(
         raise GCSOperationError(f"Failed to save report to GCS: {e}") from e
 
 
-async def generate_report(
+async def generate_reports(
     themefinder_output_path: str,
     question: str,
     output_bucket: str,
@@ -236,7 +236,7 @@ async def run() -> None:
     logger.info(f"Using ThemeFinder output: {themefinder_output_path}")
     logger.info(f"Output bucket: {output_bucket}")
 
-    await generate_report(
+    await generate_reports(
         themefinder_output_path=themefinder_output_path,
         question=question,
         output_bucket=output_bucket,
