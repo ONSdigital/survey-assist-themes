@@ -167,6 +167,7 @@ async def generate_reports(
     result = load_themefinder_output_from_gcs(input_bucket, blob_name)
     json_bytes = json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8")
     json_part = Part.from_data(data=json_bytes, mime_type="text/plain")
+    stats_text = generate_report_stats(result)
 
     config = get_report_config()
 
@@ -182,16 +183,13 @@ async def generate_reports(
             model_name=model_cfg["model_name"], system_instruction=system_instruction
         )
 
-        stats_text = None
-        if report_cfg.get("add_stats", False):
-            stats_text = generate_report_stats(result)
 
         prompt_part = Part.from_text(
             f"{prompt_file_text}\n\n"
             f"Survey question: **{question}**\n\n"
             "The ThemeFinder output JSON is attached as a document below. "
             f"{'Here are some statistics about the responses:\n\n' \
-             + stats_text if stats_text else ''}"
+             + stats_text if report_cfg.get("add_stats", False) else ''}"
         )
         logger.debug(f"{prompt_part}")
 
