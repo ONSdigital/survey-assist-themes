@@ -56,7 +56,6 @@ def get_report_config(config_path: str) -> dict[str, Any]:
             "reports_config" key is missing, or if "reports_config" is not a non-empty list.
             The underlying exception is chained to this error for debugging.
     """
-    #TODO: move this validation within the file util function
     if not config_path.startswith("gs://"):
         raise ConfigurationError(
             f"REPORT_CONFIG_PATH must start with 'gs://', got: {config_path!r}"
@@ -345,7 +344,7 @@ async def run() -> None:
     themefinder_output_path = os.getenv("THEMEFINDER_OUTPUT_PATH")
     project = os.getenv("GCP_PROJECT")
     location = os.getenv("GCP_LOCATION", "europe-west2")
-    config_path = os.getenv("REPORT_CONFIG_PATH")
+    config_path = os.getenv("REPORT_CONFIG_PATH", "")
 
     if not output_bucket or not themefinder_output_path or not project:
         msg = (
