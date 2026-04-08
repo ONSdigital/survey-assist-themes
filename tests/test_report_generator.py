@@ -125,8 +125,8 @@ class TestGetReportConfig:
             ]
         }
 
-        with patch("builtins.open", mock_open(read_data=json.dumps(config_data))):
-            result = get_report_config()
+        with patch("survey_assist_themes.report_generator.load_json_from_gcs", return_value=config_data):
+            result = get_report_config(config_path='gs://bucket/config.json')
 
         assert result == config_data
         assert result["reports_config"][0]["model"]["model_name"] == "gemini-2.5-flash"
@@ -134,18 +134,21 @@ class TestGetReportConfig:
 
     def test_get_report_config_file_not_found(self) -> None:
         """Test error handling when config file not found."""
-        with patch("builtins.open", side_effect=FileNotFoundError("Config not found")):
+        with patch(
+            "survey_assist_themes.report_generator.load_json_from_gcs",
+            side_effect=GCSOperationError("Config not found"),
+        ):
             with pytest.raises(ConfigurationError) as exc_info:
-                get_report_config()
-            assert "Failed to load report configuration" in str(exc_info.value)
+                get_report_config(config_path='gs://bucket/missing_config.json')
+                assert "Failed to load report configuration" in str(exc_info.value)
 
     def test_get_report_config_invalid_json(self) -> None:
         """Test error handling for invalid JSON."""
         invalid_json = "{ invalid json"
 
-        with patch("builtins.open", mock_open(read_data=invalid_json)):
+        with patch("survey_assist_themes.report_generator.load_json_from_gcs", return_value=invalid_json):
             with pytest.raises(ConfigurationError) as exc_info:
-                get_report_config()
+                get_report_config(config_path='gs://bucket/invalid_config.json')
             assert "Failed to load report configuration" in str(exc_info.value)
 
     def test_get_multiple_report_configs(self) -> None:
@@ -167,8 +170,11 @@ class TestGetReportConfig:
             ]
         }
 
-        with patch("builtins.open", mock_open(read_data=json.dumps(config_data))):
-            result = get_report_config()
+        with patch(
+            "survey_assist_themes.report_generator.load_json_from_gcs",
+            return_value=config_data,
+        ):
+            result = get_report_config(config_path='gs://bucket/multiple_reports_config.json')
 
         assert len(result["reports_config"]) == 2
         assert result["reports_config"][0]["title"] == "Summary"
@@ -177,9 +183,9 @@ class TestGetReportConfig:
     def test_get_report_config_missing_keys(self) -> None:
         """Test handling of missing expected keys in config."""
         config_data = {"unexpected_key": "value"}
-        with patch("builtins.open", mock_open(read_data=json.dumps(config_data))):
+        with patch("survey_assist_themes.report_generator.load_json_from_gcs", return_value=config_data):
             with pytest.raises(ConfigurationError) as exc_info:
-                get_report_config()
+                get_report_config(config_path='gs://bucket/missing_keys_config.json')
             assert "Failed to load report configuration" in str(exc_info.value)
 
 
@@ -338,7 +344,7 @@ class TestGenerateReport:
     ) -> None:
         """Test report generation with single report config."""
         with patch(
-            "survey_assist_themes.report_generator.load_themefinder_output_from_gcs"
+            "survey_assist_themes.report_generator.load_json_from_gcs"
         ) as mock_load:
             mock_load.return_value = themefinder_result
 
@@ -359,6 +365,7 @@ class TestGenerateReport:
                                     output_bucket="output-bucket",
                                     project="test-project",
                                     location="europe-west2",
+                                    config_path="gs://bucket/report_config.json"
                                 )
                             )
 
@@ -371,7 +378,7 @@ class TestGenerateReport:
     ) -> None:
         """Test report generation with multiple report configs."""
         with patch(
-            "survey_assist_themes.report_generator.load_themefinder_output_from_gcs"
+            "survey_assist_themes.report_generator.load_json_from_gcs"
         ) as mock_load:
             mock_load.return_value = themefinder_result
 
@@ -392,6 +399,7 @@ class TestGenerateReport:
                                     output_bucket="output",
                                     project="proj",
                                     location="loc",
+                                    config_path="gs://bucket/multiple_reports_config.json"
                                 )
                             )
 
@@ -402,7 +410,7 @@ class TestGenerateReport:
     ) -> None:
         """Test that GCS path is parsed correctly."""
         with patch(
-            "survey_assist_themes.report_generator.load_themefinder_output_from_gcs"
+            "survey_assist_themes.report_generator.load_json_from_gcs"
         ) as mock_load:
             mock_load.return_value = themefinder_result
 
@@ -421,6 +429,7 @@ class TestGenerateReport:
                                     output_bucket="output",
                                     project="proj",
                                     location="loc",
+                                    config_path="gs://bucket/report_config.json"
                                 )
                             )
 
@@ -429,7 +438,7 @@ class TestGenerateReport:
     @pytest.mark.asyncio
     async def test_generate_reports_invalid_gcs_path_no_slash(self) -> None:
         """Test error handling for invalid GCS path without slash."""
-        with patch("survey_assist_themes.report_generator.load_themefinder_output_from_gcs"):
+        with patch("survey_assist_themes.report_generator.load_json_from_gcs"):
             with pytest.raises(ConfigurationError, match="must be in the form"):
                 await generate_reports(
                     themefinder_output_path="gs://bucket",
@@ -437,12 +446,13 @@ class TestGenerateReport:
                     output_bucket="out",
                     project="p",
                     location="l",
+                    config_path="gs://bucket/report_config.json"
                 )
 
     @pytest.mark.asyncio
     async def test_generate_reports_invalid_gcs_path_no_gs(self) -> None:
         """Test error handling for GCS path without gs:// prefix."""
-        with patch("survey_assist_themes.report_generator.load_themefinder_output_from_gcs"):
+        with patch("survey_assist_themes.report_generator.load_json_from_gcs"):
             with pytest.raises(ConfigurationError, match="must start with 'gs://'"):
                 await generate_reports(
                     themefinder_output_path="bucket/blob",
@@ -450,6 +460,7 @@ class TestGenerateReport:
                     output_bucket="out",
                     project="p",
                     location="l",
+                    config_path="gs://bucket/report_config.json"
                 )
 
 
@@ -461,7 +472,7 @@ class TestIntegration:
     ) -> None:
         """Test complete report generation workflow with mocked dependencies."""
         with patch(
-            "survey_assist_themes.report_generator.load_themefinder_output_from_gcs",
+            "survey_assist_themes.report_generator.load_json_from_gcs",
             return_value=integration_themefinder_result,
         ):
             with patch("survey_assist_themes.report_generator.get_report_config") as mock_config:
@@ -481,6 +492,7 @@ class TestIntegration:
                                     output_bucket="output-bucket",
                                     project="test-project",
                                     location="europe-west2",
+                                    config_path="gs://bucket/report_config.json"
                                 )
                             )
 
@@ -520,7 +532,7 @@ class TestIntegration:
         }
 
         with patch(
-            "survey_assist_themes.report_generator.load_themefinder_output_from_gcs",
+            "survey_assist_themes.report_generator.load_json_from_gcs",
             return_value=themefinder_result,
         ):
             with patch("survey_assist_themes.report_generator.get_report_config") as mock_config:
@@ -540,6 +552,7 @@ class TestIntegration:
                                     output_bucket="output-bucket",
                                     project="test-project",
                                     location="europe-west2",
+                                    config_path="gs://bucket/report_config.json"
                                 )
                             )
 
@@ -550,7 +563,7 @@ class TestIntegration:
     ) -> None:
         """Test that workflow loads the correct file from GCS."""
         with patch(
-            "survey_assist_themes.report_generator.load_themefinder_output_from_gcs",
+            "survey_assist_themes.report_generator.load_json_from_gcs",
             return_value=integration_themefinder_result,
         ) as mock_load:
             with patch("survey_assist_themes.report_generator.get_report_config") as mock_config:
@@ -568,6 +581,7 @@ class TestIntegration:
                                     output_bucket="my-output-bucket",
                                     project="my-project",
                                     location="us-central1",
+                                    config_path="gs://bucket/report_config.json"
                                 )
                             )
 
@@ -581,7 +595,7 @@ class TestIntegration:
         """Test workflow generates stats when enabled in config."""
         single_report_config["reports_config"][0]["add_stats"] = True
         with patch(
-            "survey_assist_themes.report_generator.load_themefinder_output_from_gcs",
+            "survey_assist_themes.report_generator.load_json_from_gcs",
             return_value=integration_themefinder_result,
         ):
             with patch("survey_assist_themes.report_generator.get_report_config") as mock_config:
@@ -606,6 +620,7 @@ class TestIntegration:
                                         output_bucket="output-bucket",
                                         project="test-project",
                                         location="europe-west2",
+                                        config_path="gs://bucket/report_config.json"
                                     )
                                 )
 
@@ -616,7 +631,7 @@ class TestIntegration:
     ) -> None:
         """Test that the survey question is included in the prompt."""
         with patch(
-            "survey_assist_themes.report_generator.load_themefinder_output_from_gcs",
+            "survey_assist_themes.report_generator.load_json_from_gcs",
             return_value=integration_themefinder_result,
         ):
             with patch("survey_assist_themes.report_generator.get_report_config") as mock_config:
@@ -638,6 +653,7 @@ class TestIntegration:
                                     output_bucket="output-bucket",
                                     project="test-project",
                                     location="europe-west2",
+                                    config_path="gs://bucket/report_config.json"
                                 )
                             )
 
@@ -652,7 +668,7 @@ class TestIntegration:
     ) -> None:
         """Test complete end-to-end workflow with all components."""
         with patch(
-            "survey_assist_themes.report_generator.load_themefinder_output_from_gcs",
+            "survey_assist_themes.report_generator.load_json_from_gcs",
             return_value=integration_themefinder_result,
         ) as mock_load:
             with patch(
@@ -676,6 +692,7 @@ class TestIntegration:
                                     output_bucket="output-bucket",
                                     project="test-project",
                                     location="europe-west2",
+                                    config_path="gs://bucket/report_config.json"
                                 )
                             )
 
