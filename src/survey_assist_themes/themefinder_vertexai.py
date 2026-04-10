@@ -29,6 +29,7 @@ from survey_assist_themes.exceptions import (
     GCSOperationError,
     ThemeFinderError,
 )
+from survey_assist_themes.report_generator import generate_reports
 from survey_assist_themes.utils.file_utils import (
     load_feedback_csv_from_gcs,
     make_timestamped_blob_names,
@@ -36,8 +37,6 @@ from survey_assist_themes.utils.file_utils import (
     save_themefinder_output_to_gcs,
 )
 from survey_assist_themes.utils.retry import async_retry_with_backoff
-
-from survey_assist_themes.report_generator import generate_reports
 
 logger = get_logger(__name__)
 
@@ -192,23 +191,23 @@ async def run() -> None:
     except Exception as e:
         logger.error(f"Failed to save results to GCS: {e}", exc_info=True)
         raise GCSOperationError(f"Failed to save results to GCS: {e}") from e
-    
+
     # Optional: Trigger report generation pipeline
     generate_report = os.getenv("GENERATE_REPORTS", True)
-    project = os.getenv("GCP_PROJECT")
+    project = os.getenv("GCP_PROJECT", "")
     location = os.getenv("LOCATION", "europe-west2")
-    config_path = os.getenv("REPORT_CONFIG_PATH")
+    config_path = os.getenv("REPORT_CONFIG_PATH", "")
 
     if generate_report:
         logger.info("Starting report generation pipeline")
         await generate_reports(
-                themefinder_output_path=f"gs://{output_bucket}/{output_path}",
-                question=question,
-                output_bucket=output_bucket,
-                project=project,
-                location=location,
-                config_path=config_path,
-            )
+            themefinder_output_path=f"gs://{output_bucket}/{output_path}",
+            question=question,
+            output_bucket=output_bucket,
+            project=project,
+            location=location,
+            config_path=config_path,
+        )
 
 
 def main() -> None:
