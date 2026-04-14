@@ -1,0 +1,37 @@
+steps:
+  - name: gcr.io/$PROJECT_ID/testrunner
+    args:
+      - '-c'
+      - |
+        set -e
+        echo === Check Tooling Versions ===
+        gcloud --version
+        make --version
+        pip --version
+        python --version
+        poetry --version
+
+        echo === Install dependencies for tests ===
+        poetry install
+        
+        echo === Running unit tests ===
+        poetry run pytest tests/ --cov=survey_assist_themes --cov-report=term-missing --cov-report=html | tee coverage-report.txt
+        if grep -q "FAIL Required test coverage" coverage-report.txt; then
+          echo "ERROR: Target coverage was not reached, stopping pipeline."
+          exit 1
+        fi
+
+        echo === Looking up config from parameter store ===
+        dev_config=$(gcloud parametermanager parameters versions describe $_ENV_NAME --parameter=infra-test-config --location=global --project $PROJECT_ID --format=json | python3 -c "import sys, json; print(json.load(sys.stdin)['payload']['data'])" | base64 --decode)
+        THEMES_IMAGE=$(echo $dev_config | python3 -c "import sys, json; print(json.load(sys.stdin)['cr-themes-image'])")
+
+        echo === Build Docker image, tag and push to GAR ===
+        docker build -t $$THEMES_IMAGE:$SHORT_SHA -t $$THEMES_IMAGE:latest .
+        docker push $$THEMES_IMAGE:latest
+        docker push $$THEMES_IMAGE:$SHORT_SHA
+
+    id: Run unit tests, build, tag and deploy themes cloud run job
+    entrypoint: bash
+timeout: 1800s
+options:
+  logging: CLOUD_LOGGING_ONLY

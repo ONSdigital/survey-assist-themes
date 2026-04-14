@@ -1,0 +1,25 @@
+steps:
+  - name: gcr.io/$PROJECT_ID/testrunner
+    args:
+      - '-c'
+      - |
+        set -e
+        echo === Looking up config from parameter store ===
+        dev_config=$(gcloud parametermanager parameters versions describe dev --parameter=infra-test-config --location=global --project $PROJECT_ID --format=json | python3 -c "import sys, json; print(json.load(sys.stdin)['payload']['data'])" | base64 --decode)
+        THEMES_IMAGE_DEV=$(echo $dev_config | python3 -c "import sys, json; print(json.load(sys.stdin)['cr-themes-image'])")
+        
+        preprod_config=$(gcloud parametermanager parameters versions describe preprod --parameter=infra-test-config --location=global --project $PROJECT_ID --format=json | python3 -c "import sys, json; print(json.load(sys.stdin)['payload']['data'])" | base64 --decode)
+        THEMES_IMAGE_RELEASES=$(echo $preprod_config | python3 -c "import sys, json; print(json.load(sys.stdin)['cr-themes-image'])")
+                
+        echo === Pulling image dev image with tag $SHORT_SHA ===
+        docker pull $$THEMES_IMAGE_DEV:$SHORT_SHA
+
+        echo === Build Docker image, tag and push to GAR ===
+        docker tag $$THEMES_IMAGE_DEV:$SHORT_SHA $$THEMES_IMAGE_RELEASES:$TAG_NAME
+        docker push $$THEMES_IMAGE_RELEASES:$TAG_NAME
+
+    id: Tag and push release image
+    entrypoint: bash
+timeout: 2000s
+options:
+  logging: CLOUD_LOGGING_ONLY
