@@ -83,8 +83,7 @@ def get_report_config(config_path: str) -> dict[str, Any]:
     path = config_path.removeprefix("gs://")
     if "/" not in path:
         raise ConfigurationError(
-            "REPORT_CONFIG_PATH must be in the form 'gs://bucket/blob', "
-            f"got: {config_path!r}"
+            "REPORT_CONFIG_PATH must be in the form 'gs://bucket/blob', " f"got: {config_path!r}"
         )
 
     input_bucket, blob_name = path.split("/", 1)
@@ -92,18 +91,14 @@ def get_report_config(config_path: str) -> dict[str, Any]:
     try:
         config = load_json_from_gcs(input_bucket, blob_name)
     except Exception as exc:
-        raise ConfigurationError(
-            f"Failed to load report configuration: {exc}"
-        ) from exc
+        raise ConfigurationError(f"Failed to load report configuration: {exc}") from exc
 
     if not isinstance(config, dict):
         raise ConfigurationError("Report configuration must be a JSON object")
 
     reports_config = config.get(_REPORTS_CONFIG_KEY)
     if reports_config is None:
-        raise ConfigurationError(
-            f"Missing required key {_REPORTS_CONFIG_KEY!r} in configuration"
-        )
+        raise ConfigurationError(f"Missing required key {_REPORTS_CONFIG_KEY!r} in configuration")
 
     if not isinstance(reports_config, list):
         raise ConfigurationError(f"{_REPORTS_CONFIG_KEY!r} must be a list")
@@ -144,23 +139,18 @@ def generate_report_stats(result: dict[str, Any]) -> str:
         count = theme_counts.get(topic_id, 0)
         percentage = (count / total_responses * 100) if total_responses > 0 else 0
         themes_block += (
-            f"- [{topic_id}] {theme.get('topic')} | "
-            f"Count: {count} ({percentage:.1f}%)\n"
+            f"- [{topic_id}] {theme.get('topic')} | " f"Count: {count} ({percentage:.1f}%)\n"
         )
 
     pos_count = sum(1 for item in sentiment_data if item.get("position") == "AGREEMENT")
-    neg_count = sum(
-        1 for item in sentiment_data if item.get("position") == "DISAGREEMENT"
-    )
+    neg_count = sum(1 for item in sentiment_data if item.get("position") == "DISAGREEMENT")
     unclear_count = sum(1 for item in sentiment_data if item.get("position") == "UNCLEAR")
 
     rich_count = sum(1 for item in detail_data if item.get("evidence_rich") == "YES")
     non_rich_count = sum(1 for item in detail_data if item.get("evidence_rich") == "NO")
 
     no_theme_count = sum(1 for item in mapping if not item.get("labels"))
-    no_theme_count_pct = (
-        (no_theme_count / total_responses * 100) if total_responses > 0 else 0
-    )
+    no_theme_count_pct = (no_theme_count / total_responses * 100) if total_responses > 0 else 0
     multi_theme_count = sum(1 for item in mapping if len(item.get("labels", [])) > 1)
 
     return (
@@ -316,12 +306,10 @@ def _build_model_config(model_cfg: dict[str, Any]) -> dict[str, Any]:
     """
     max_output_tokens = model_cfg.get("max_output_tokens", _DEFAULT_MAX_OUTPUT_TOKENS)
     if not isinstance(max_output_tokens, int) or max_output_tokens <= 0:
-        raise ConfigurationError(
-            "'max_output_tokens' must be a positive integer when specified."
-        )
+        raise ConfigurationError("'max_output_tokens' must be a positive integer when specified.")
 
     temperature = model_cfg.get("temperature", _DEFAULT_TEMPERATURE)
-    if not isinstance(temperature, (int, float)):
+    if not isinstance(temperature, int | float) or temperature < 0:
         raise ConfigurationError("'temperature' must be numeric when specified.")
 
     return {
@@ -357,9 +345,7 @@ async def _generate_single_report(config: dict[str, Any]) -> None:
         )
     except Exception as exc:
         logger.exception(f"Report generation failed for {title!r}")
-        raise ThemeFinderError(
-            f"Model failed to generate report {title!r}: {exc}"
-        ) from exc
+        raise ThemeFinderError(f"Model failed to generate report {title!r}: {exc}") from exc
 
     debug_meta = _extract_response_debug(response)
     logger.info(
@@ -385,9 +371,7 @@ async def _generate_single_report(config: dict[str, Any]) -> None:
         )
     except Exception as exc:
         logger.exception(f"Failed to save report {title!r} to GCS")
-        raise GCSOperationError(
-            f"Failed to save report {title!r} to GCS: {exc}"
-        ) from exc
+        raise GCSOperationError(f"Failed to save report {title!r} to GCS: {exc}") from exc
 
     logger.info(f"Report saved to gs://{output_bucket}/{prefix}.md")
 
@@ -417,8 +401,7 @@ async def generate_reports(
     """
     if not themefinder_output_path.startswith("gs://"):
         raise ConfigurationError(
-            "THEMEFINDER_OUTPUT_PATH must start with 'gs://', "
-            f"got: {themefinder_output_path!r}"
+            "THEMEFINDER_OUTPUT_PATH must start with 'gs://', " f"got: {themefinder_output_path!r}"
         )
 
     path = themefinder_output_path.removeprefix("gs://")
@@ -464,8 +447,7 @@ async def generate_reports(
         system_instruction = report_cfg.get("system_instructions")
         if not isinstance(system_instruction, str) or not system_instruction.strip():
             raise ConfigurationError(
-                "Each report configuration must contain non-empty "
-                "'system_instructions'."
+                "Each report configuration must contain non-empty " "'system_instructions'."
             )
 
         add_stats = bool(report_cfg.get("add_stats", False))
