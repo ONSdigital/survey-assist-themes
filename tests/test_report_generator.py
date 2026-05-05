@@ -22,6 +22,22 @@ from survey_assist_themes.report_generator import (
 )
 
 
+def mock_vertex_response(
+    text: str = "Generated report content",
+    finish_reason: int = 1,
+) -> MagicMock:
+    response = MagicMock()
+    response.text = text
+
+    candidate = MagicMock()
+    candidate.finish_reason = finish_reason
+    candidate.finish_message = ""
+
+    response.candidates = [candidate]
+    response.usage_metadata = None
+    return response
+
+
 @pytest.fixture
 def base_config() -> dict[str, Any]:
     """Fixture for common config used in multiple tests."""
@@ -134,25 +150,24 @@ class TestGetReportConfig:
         assert result["reports_config"][0]["model"]["temperature"] == 0.2
 
     def test_get_report_config_file_not_found(self) -> None:
-        """Test error handling when config file not found."""
         with patch(
             "survey_assist_themes.report_generator.load_json_from_gcs",
             side_effect=GCSOperationError("Config not found"),
         ):
             with pytest.raises(ConfigurationError) as exc_info:
                 get_report_config(config_path="gs://bucket/missing_config.json")
-                assert "Failed to load report configuration" in str(exc_info.value)
+
+        assert "Failed to load report configuration" in str(exc_info.value)
 
     def test_get_report_config_invalid_json(self) -> None:
-        """Test error handling for invalid JSON."""
-        invalid_json = "{ invalid json"
-
         with patch(
-            "survey_assist_themes.report_generator.load_json_from_gcs", return_value=invalid_json
+            "survey_assist_themes.report_generator.load_json_from_gcs",
+            return_value="{ invalid json",
         ):
             with pytest.raises(ConfigurationError) as exc_info:
                 get_report_config(config_path="gs://bucket/invalid_config.json")
-            assert "Failed to load report configuration" in str(exc_info.value)
+
+        assert "Report configuration must be a JSON object" in str(exc_info.value)
 
     def test_get_multiple_report_configs(self) -> None:
         """Test loading config file with multilpe report configs."""
@@ -184,14 +199,16 @@ class TestGetReportConfig:
         assert result["reports_config"][1]["title"] == "Detailed"
 
     def test_get_report_config_missing_keys(self) -> None:
-        """Test handling of missing expected keys in config."""
         config_data = {"unexpected_key": "value"}
+
         with patch(
-            "survey_assist_themes.report_generator.load_json_from_gcs", return_value=config_data
+            "survey_assist_themes.report_generator.load_json_from_gcs",
+            return_value=config_data,
         ):
             with pytest.raises(ConfigurationError) as exc_info:
                 get_report_config(config_path="gs://bucket/missing_keys_config.json")
-            assert "Failed to load report configuration" in str(exc_info.value)
+
+        assert "Missing required key 'reports_config'" in str(exc_info.value)
 
 
 class TestGenerateReportStats:
@@ -289,11 +306,9 @@ class TestGenerateSingleReport:
     """Tests for _generate_single_report async function."""
 
     def test_generate_single_report_success(self, base_config: dict[str, Any]) -> None:
-        """Test successful single report generation."""
-
-        mock_response = MagicMock()
-        mock_response.text = "Generated report content"
-        base_config["model"].generate_content.return_value = mock_response
+        base_config["model"].generate_content.return_value = mock_vertex_response(
+            "Generated report content"
+        )
 
         with patch(
             "survey_assist_themes.report_generator.save_markdown_report_to_gcs"
@@ -302,19 +317,14 @@ class TestGenerateSingleReport:
 
         mock_save.assert_called_once()
         call_args = mock_save.call_args
-
         assert call_args[1]["bucket_name"] == "test-bucket"
         assert "Executive_Summary" in call_args[1]["destination_blob_name"]
         assert call_args[1]["report"] == "Generated report content"
 
     def test_generate_single_report_empty_response(self, base_config: dict[str, Any]) -> None:
-        """Test error handling when model returns empty response."""
+        base_config["model"].generate_content.return_value = mock_vertex_response("")
 
-        mock_response = MagicMock()
-        mock_response.text = ""
-        base_config["model"].generate_content.return_value = mock_response
-
-        with pytest.raises(ValueError, match="LLM response missing or empty"):
+        with pytest.raises(ThemeFinderError, match="empty response"):
             asyncio.run(_generate_single_report(base_config))
 
     def test_generate_single_report_model_error(self, base_config: dict[str, Any]) -> None:
@@ -327,17 +337,14 @@ class TestGenerateSingleReport:
 
     @pytest.mark.asyncio
     async def test_generate_single_report_gcs_save_error(self, base_config: dict[str, Any]) -> None:
-        """Test error handling when GCS save fails."""
-        mock_response = MagicMock()
-        mock_response.text = "Valid content"
+        mock_response = mock_vertex_response("Valid content")
 
-        with patch("asyncio.to_thread") as mock_to_thread:
-            mock_to_thread.return_value = mock_response
+        with patch("asyncio.to_thread", return_value=mock_response):
             with patch(
                 "survey_assist_themes.report_generator.save_markdown_report_to_gcs",
                 side_effect=Exception("GCS Error"),
             ):
-                with pytest.raises(GCSOperationError, match="Failed to save report to GCS"):
+                with pytest.raises(GCSOperationError, match="Failed to save report"):
                     await _generate_single_report(base_config)
 
 
