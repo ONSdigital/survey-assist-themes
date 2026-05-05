@@ -335,7 +335,7 @@ async def _generate_single_report(config: dict[str, Any]) -> None:
     output_bucket = str(config["output_bucket"])
     prefix = f"{blob_name.rsplit('.', 1)[0]}_{title.replace(' ', '_')}"
 
-    logger.info("Generating report {title}")
+    logger.info(f"Generating report {title}")
 
     try:
         response = await asyncio.to_thread(
@@ -344,7 +344,7 @@ async def _generate_single_report(config: dict[str, Any]) -> None:
             generation_config=config["model_config"],
         )
     except Exception as exc:
-        logger.exception(f"Report generation failed for {title!r}")
+        logger.error(f"Report generation failed for {title!r}")
         raise ThemeFinderError(f"Model failed to generate report {title!r}: {exc}") from exc
 
     debug_meta = _extract_response_debug(response)
@@ -370,7 +370,7 @@ async def _generate_single_report(config: dict[str, Any]) -> None:
             destination_blob_name=prefix,
         )
     except Exception as exc:
-        logger.exception(f"Failed to save report {title!r} to GCS")
+        logger.error(f"Failed to save report {title!r} to GCS")
         raise GCSOperationError(f"Failed to save report {title!r} to GCS: {exc}") from exc
 
     logger.info(f"Report saved to gs://{output_bucket}/{prefix}.md")
