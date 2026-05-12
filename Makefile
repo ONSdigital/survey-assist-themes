@@ -50,3 +50,7 @@ install: ## Install the dependencies
 
 install-dev: ## Install the dev dependencies
 	poetry install
+
+.PHONY: run-report-generator
+run-report-generator:
+	poetry run python src/survey_assist_themes/report_generator.py
