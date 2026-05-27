@@ -541,3 +541,76 @@ def save_theme_csvs_to_gcs(
     except GoogleCloudError as e:
         logger.error(f"GCS operation failed: {e}", exc_info=True)
         raise GCSOperationError(f"Failed to save output to GCS: {e}") from e
+
+def rationalise_themefinder_output(data: dict[str, Any]) -> dict[str, Any]:
+    """Convert raw ThemeFinder output into the compact JSON schema."""
+
+    themes_lookup: dict[str, Any] = {}
+    responses_lookup: dict[str, Any] = {}
+
+    for theme in data.get("themes", []):
+        topic_id = str(theme["topic_id"])
+        themes_lookup[topic_id] = {
+            "topic": theme["topic"],
+            "source_topic_count": theme["source_topic_count"],
+        }
+
+    for mapping in data.get("mapping", []):
+        response_id = str(mapping["response_id"])
+        responses_lookup[response_id] = {
+            "text": mapping["response"],
+            "sentiment": None,
+            "evidence_rich": False,
+            "labels": mapping.get("labels", []),
+            "processable": True,
+        }
+
+    for sentiment in data.get("sentiment", []):
+        response_id = str(sentiment["response_id"])
+        responses_lookup.setdefault(
+            response_id,
+            {
+                "text": sentiment["response"],
+                "sentiment": None,
+                "evidence_rich": False,
+                "labels": [],
+                "processable": True,
+            },
+        )
+        responses_lookup[response_id]["sentiment"] = sentiment["position"]
+
+    for detail in data.get("detailed_responses", []):
+        response_id = str(detail["response_id"])
+        responses_lookup.setdefault(
+            response_id,
+            {
+                "text": detail["response"],
+                "sentiment": None,
+                "evidence_rich": False,
+                "labels": [],
+                "processable": True,
+            },
+        )
+        responses_lookup[response_id]["evidence_rich"] = (
+            str(detail.get("evidence_rich", "")).upper() == "YES"
+        )
+
+    for unprocessable in data.get("unprocessables", []):
+        response_id = str(unprocessable["response_id"])
+        responses_lookup.setdefault(
+            response_id,
+            {
+                "text": unprocessable["response"],
+                "sentiment": None,
+                "evidence_rich": False,
+                "labels": [],
+                "processable": False,
+            },
+        )
+        responses_lookup[response_id]["processable"] = False
+
+    return {
+        "question": data.get("question"),
+        "responses": responses_lookup,
+        "themes": themes_lookup,
+    }

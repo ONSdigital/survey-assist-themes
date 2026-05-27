@@ -33,6 +33,7 @@ from survey_assist_themes.report_generator import generate_reports
 from survey_assist_themes.utils.file_utils import (
     load_feedback_csv_from_gcs,
     make_timestamped_blob_names,
+    rationalise_themefinder_output,
     save_theme_csvs_to_gcs,
     save_themefinder_output_to_gcs,
 )
@@ -67,12 +68,14 @@ async def _run_themefinder_with_retry(
     Raises:
         Exception: If ThemeFinder processing fails after all retries.
     """
-    result = await find_themes(
+    raw_result: dict[str, Any] = await _run_themefinder_with_retry(
         responses_df,
         llm,
         question,
-        system_prompt=system_prompt,
+        system_prompt,
     )
+    result = rationalise_themefinder_output(raw_result)
+
     return cast(dict[str, Any], result)
 
 
