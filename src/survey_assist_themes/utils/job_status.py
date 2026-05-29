@@ -98,6 +98,7 @@ class JobStatus:
         start_time: datetime.datetime = None,
         end_time: datetime.datetime = None,
         history: list[dict] = None,
+        err_msg: str = None,
     ):
         """Convert job status information to a dictionary for firestore."""
         now = datetime.datetime.now(tz=datetime.UTC)
@@ -113,71 +114,92 @@ class JobStatus:
             job_status["end_time"] = end_time
         if history is not None:
             job_status["history"] = history
+        if err_msg is not None:
+            job_status["err_msg"] = err_msg
         return job_status
 
-    def _status_exists(self, job_id) -> bool:
-        """Check if a job status document already exists in the db."""
-        doc_ref = self._col_ref.document(job_id)
-        doc = doc_ref.get(retry=self._retry)
-        return doc.exists
-
-    def update(self, state: JobState):
+    def update(self, state: JobState, err_msg: str = None):
         """Update a job status document in the firestore db.
 
         Parameters
         ----------
         state : JobState
             The state to update the job status to.
+        err_msg : str, optional
+            An optional error message to include in the job status. Can only
+            be set when state is JobState.FAILED.
 
         Raises
         ------
         ValueError
-            - If JobState.STARTING is used and a job status document already
-            exists (status updates are unique per job).
-            - If a non-JobState.STARTING state is used but no job status
-            document exists (an initial status update is missing, and this
+            - If JobState.STARTING is provided and a job status document
+            already exists (prevent starting job twice).
+            - If a non-JobState.STARTING state is provided and no job status
+            already exists (i.e. an initial status update is missing)
             would result in missing field information e.g. start_time).
+            - If an end state is provided but the existing job status suggests
+            the job has already ended (prevent modifying status of completed
+            jobs).
+            - If an error message is provided when the state is not
+            JobState.FAILED (reserved for failed jobs only).
         """
-        doc_ref = self._col_ref.document(self._job_id)
+        doc = self._col_ref.document(self._job_id).get(retry=self._retry)
+        doc_dict = doc.to_dict() if doc.exists else {}
         now = datetime.datetime.now(tz=datetime.UTC)
 
         # these cases handle unintentional misuse of state in upstream logic
         # case start state but status already exists
-        if state.start and self._status_exists(self._job_id):
+        if state.start and doc.exists:
             raise ValueError(
                 f"Job status for {self._job_id} already exists and the "
                 f"provided state is {state.name}. Expected no existing status "
                 "at the job start."
             )
         # case non-start state and no existing status
-        elif not state.start and not self._status_exists(self._job_id):
+        elif not state.start and not doc.exists:
             raise ValueError(
                 f"No existing job status for {self._job_id} but the provided "
                 f"state is {state.name}. Expected an existing status if the "
-                f" state is not {JobState.STARTED.name}."
+                f"state is not {JobState.STARTED.name}."
+            )
+        # case end state but an end time already exists (can't end twice).
+        elif state.end and doc_dict.get("end_time") is not None:
+            raise ValueError(
+                f"Existing job status for {self._job_id} has an end_time and "
+                f"the provided state is {state.name}. Not updating to prevent "
+                "modifying the status of a completed job."
+            )
+        # case not failed and error message is provided
+        elif not state == JobState.FAILED and err_msg is not None:
+            raise ValueError(
+                f"Provided state is {state.name} but an error message is also "
+                "provided. Error messages should only be included for failed "
+                "jobs."
             )
 
-        # append previous status to history before updating
+        # build and append any existing job status to track history
         if not state.start:
-            existing_status = doc_ref.get(retry=self._retry).to_dict()
-            history = existing_status.get("history", [])
+            history = doc_dict.get("history", [])
+            # use direct keys to raise keyerror when required fields missing
             history.append(
                 {
-                    "state": existing_status["state"],
-                    "msg": existing_status["msg"],
-                    "updated_time": existing_status["updated_time"],
+                    "state": doc_dict["state"],
+                    "msg": doc_dict["msg"],
+                    "updated_time": doc_dict["updated_time"],
                 }
             )
         else:
             history = None
 
-        doc_ref.set(
+        # upset the job status document with latest state information
+        self._col_ref.document(self._job_id).set(
             self._job_status_to_dict(
                 user_id=self._user_id,
                 state=state,
                 start_time=now if state.start else None,
                 end_time=now if state.end else None,
                 history=history,
+                err_msg=err_msg,
             ),
             merge=True,
             retry=self._retry,
