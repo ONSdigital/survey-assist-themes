@@ -97,6 +97,7 @@ class JobStatus:
         state: JobState,
         start_time: datetime.datetime = None,
         end_time: datetime.datetime = None,
+        history: list[dict] = None,
     ):
         """Convert job status information to a dictionary for firestore."""
         now = datetime.datetime.now(tz=datetime.UTC)
@@ -110,6 +111,8 @@ class JobStatus:
             job_status["start_time"] = start_time
         if end_time is not None:
             job_status["end_time"] = end_time
+        if history is not None:
+            job_status["history"] = history
         return job_status
 
     def _status_exists(self, job_id) -> bool:
@@ -142,9 +145,9 @@ class JobStatus:
         # case start state but status already exists
         if state.start and self._status_exists(self._job_id):
             raise ValueError(
-                f"Job status for {self._job_id} already exists but the "
+                f"Job status for {self._job_id} already exists and the "
                 f"provided state is {state.name}. Expected no existing status "
-                "at the job start stage."
+                "at the job start."
             )
         # case non-start state and no existing status
         elif not state.start and not self._status_exists(self._job_id):
@@ -154,12 +157,27 @@ class JobStatus:
                 f" state is not {JobState.STARTED.name}."
             )
 
+        # append previous status to history before updating
+        if not state.start:
+            existing_status = doc_ref.get(retry=self._retry).to_dict()
+            history = existing_status.get("history", [])
+            history.append(
+                {
+                    "state": existing_status["state"],
+                    "msg": existing_status["msg"],
+                    "updated_time": existing_status["updated_time"],
+                }
+            )
+        else:
+            history = None
+
         doc_ref.set(
             self._job_status_to_dict(
                 user_id=self._user_id,
                 state=state,
                 start_time=now if state.start else None,
                 end_time=now if state.end else None,
+                history=history,
             ),
             merge=True,
             retry=self._retry,
