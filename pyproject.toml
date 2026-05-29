@@ -42,6 +42,7 @@ pytest-asyncio = "^1.3.0"
 # -----------------------------
 # TOOL CONFIGURATION
 # -----------------------------
+ipykernel = "^7.2.0"
 
 [tool.isort]
 profile = "black"
