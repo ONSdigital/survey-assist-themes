@@ -11,7 +11,17 @@ from google.api_core.retry import Retry
 
 @dataclass(frozen=True)
 class _JobStateDetails:
-    """Details properties for job state."""
+    """Job state details.
+
+    Attributes
+    ----------
+    msg: str
+        A message describing the job state (human readable).
+    start: bool, optional
+        Whether this state represents the start of a job. Default is False.
+    end: bool, optional
+        Whether this state represents the end of a job. Default is False.
+    """
 
     msg: str
     start: bool = False
@@ -19,9 +29,10 @@ class _JobStateDetails:
 
 
 class JobState(Enum):
-    """Possible states for a job, with associated messages."""
+    """Possible discrete states for a job."""
 
     STARTED = _JobStateDetails("Job has started", start=True)
+    # TODO: build on IN_PROGRESS to cover more specific states
     IN_PROGRESS = _JobStateDetails("Job is in progress")
     COMPLETED = _JobStateDetails("Job is completed", end=True)
     FAILED = _JobStateDetails("Job has failed", end=True)
@@ -40,7 +51,50 @@ class JobState(Enum):
 
 
 class JobStatus:
-    """Connect to a firestore db and create/update the status of a job."""
+    """Connect to a firestore db and create/update the status of a job.
+
+    Parameters
+    ----------
+    gcp_project_id : str
+        The GCP project ID where the firestore db is hosted.
+    firestore_db_name : str
+        The name of the firestore db to connect to.
+    job_id : str
+        A unique identifier for the job to track the status of.
+    user_id : str
+        A unique identifier for the user running the job.
+
+    Methods
+    -------
+    update
+        Update the job status in the firestore db with a new status
+        information. See the method docstring for more details.
+
+    Raises
+    ------
+    ConnectionError
+        If there is an error connecting to the firestore db during
+        initialisation.
+
+    Examples
+    --------
+    A typical example usage of the JobStatus class:
+    >>> from survey_assist_themes.utils.job_status import JobStatus, JobState
+    >>> gcp_project_id = "MY_GCP_PROJECT_ID"
+    >>> firestore_db_name = "MY_FIRESTORE_DB_NAME"
+    >>> job_id = "my_unique_job_id"
+    >>> user_id = "my_unique_user_id"
+    >>> js = JobStatus(gcp_project_id, firestore_db_name, job_id, user_id)
+    >>> js.update(JobState.STARTED)
+     # Job status document created in firestore db with state "STARTED"
+    >>> js.update(JobState.IN_PROGRESS)
+     # Job status document updated in firestore db with state "IN_PROGRESS"
+    >>> js.update(JobState.COMPLETED)
+     # Job status document updated in firestore db with state "COMPLETED"
+
+    Or, if an error occurs during the job
+    >>> js.update(JobState.FAILED, "A useful error message")
+    """
 
     _collection_name = "job_status"
     _retry = Retry(
@@ -121,6 +175,20 @@ class JobStatus:
     def update(self, state: JobState, err_msg: str = None):
         """Update a job status document in the firestore db.
 
+        A status document will include the following top level fields:
+        - user_id: the user running the job (str)
+        - updated_time: the time the status was updated (datetime)
+        - state: the current state of the job (str, from JobState enum)
+        - msg: a message describing the current state (str, from JobState enum)
+        - start_time: the time the job started (datetime, only for start state)
+
+        Subsequent updates to the job status will additionally include:
+        - history: a list of previous statuses (with their state, message, and
+        update times)
+
+        At the end of the job, the following fields will be added:
+        - end_time: the time the job ended (datetime, only for end states)
+
         Parameters
         ----------
         state : JobState
@@ -169,7 +237,7 @@ class JobStatus:
                 f"the provided state is {state.name}. Not updating to prevent "
                 "modifying the status of a completed job."
             )
-        # case not failed and error message is provided
+        # case not failed and error message is provided (reserve arg)
         elif not state == JobState.FAILED and err_msg is not None:
             raise ValueError(
                 f"Provided state is {state.name} but an error message is also "
