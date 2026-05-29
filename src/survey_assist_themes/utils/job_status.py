@@ -56,15 +56,15 @@ class JobStatus:
         gcp_project_id: str,
         firestore_db_name: str,
         job_id: str,
-        user_id: str = None,
+        user_id: str,
     ):
-        self.gcp_project_id = gcp_project_id
-        self.firestore_db_name = firestore_db_name
+        self._gcp_project_id = gcp_project_id
+        self._firestore_db_name = firestore_db_name
         self._job_id = job_id
         self._user_id = user_id
 
         # Initialize Firestore connection
-        app_options = {"projectId": self.gcp_project_id}
+        app_options = {"projectId": self._gcp_project_id}
         try:
             app = initialize_app(options=app_options)
         # handle case where app connection already initialised
@@ -78,7 +78,7 @@ class JobStatus:
                 ) from e
 
         self._db = firestore.client(
-            app=app, database_id=self.firestore_db_name
+            app=app, database_id=self._firestore_db_name
         )
 
         # non-intrusive test to verify db connection - list all collections
