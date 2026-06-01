@@ -7,6 +7,8 @@ from enum import Enum
 from firebase_admin import firestore, get_app, initialize_app
 from google.api_core.exceptions import ServiceUnavailable
 from google.api_core.retry import Retry
+from survey_assist_utils.logging import get_logger
+from survey_assist_utils.logging.logging_utils import VALID_LOG_LEVELS
 
 
 @dataclass(frozen=True)
@@ -64,6 +66,9 @@ class JobStatus:
         A unique identifier for the job to track the status of.
     user_id : str
         A unique identifier for the user running the job.
+    log_level : str, optional
+        The logging level to use for the JobStatus class. Must be one of
+        "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL". Default is "INFO".
 
     Methods
     -------
@@ -112,13 +117,24 @@ class JobStatus:
         firestore_db_name: str,
         job_id: str,
         user_id: str,
+        log_level: str = "INFO",
     ):
         self._gcp_project_id = gcp_project_id
         self._firestore_db_name = firestore_db_name
         self._job_id = job_id
         self._user_id = user_id
+        if log_level not in VALID_LOG_LEVELS:
+            raise ValueError(
+                f"log_level must be one of {VALID_LOG_LEVELS}, but got "
+                f"{log_level}."
+            )
+        self._logger = get_logger(__name__, log_level)
 
-        # Initialize Firestore connection
+        # Initialise Firestore connection
+        self._logger.debug(
+            f"Initialising Firestore connection to {self._firestore_db_name} "
+            f"in project {self._gcp_project_id}."
+        )
         app_options = {"projectId": self._gcp_project_id}
         try:
             app = initialize_app(options=app_options)
@@ -126,6 +142,9 @@ class JobStatus:
         # this can happen during dev when calling __init__ multiple times
         except ValueError as e:
             if "The default Firebase app already exists" in str(e):
+                self._logger.warning(
+                    "Default Firebase app already exists. Using existing app."
+                )
                 app = get_app()
             else:
                 raise ValueError(
@@ -139,12 +158,19 @@ class JobStatus:
         # non-intrusive test to verify db connection - list all collections
         try:
             _ = list(self._db.collections(retry=self._retry))
+            self._logger.debug(
+                "Non-intrusive test to verify db connection succeeded."
+            )
         except Exception as e:
             raise ConnectionError(
                 f"Error when connecting to Firestore: {e}"
             ) from e
 
         self._col_ref = self._db.collection(self._collection_name)
+        self._logger.debug(
+            f"Successfully connected to Firestore db {self._firestore_db_name}"
+            f" in project {self._gcp_project_id}."
+        )
 
     @staticmethod
     def _job_status_to_dict(
@@ -215,6 +241,10 @@ class JobStatus:
         doc = self._col_ref.document(self._job_id).get(retry=self._retry)
         doc_dict = doc.to_dict() if doc.exists else {}
         now = datetime.datetime.now(tz=datetime.UTC)
+        self._logger.debug(f"Provided state for update: {state.name}.")
+        self._logger.debug(
+            f"Firestore doc for job {self._job_id} exists: {doc.exists}."
+        )
 
         # these cases handle unintentional misuse of state in upstream logic
         # case start state but status already exists
@@ -248,6 +278,7 @@ class JobStatus:
 
         # build and append any existing job status to track history
         if not state.start:
+            self._logger.debug("Building job status history for update.")
             history = doc_dict.get("history", [])
             # use direct keys to raise keyerror when required fields missing
             history.append(
@@ -258,9 +289,14 @@ class JobStatus:
                 }
             )
         else:
+            self._logger.debug("No existing job status history to build.")
             history = None
 
         # upset the job status document with latest state information
+        self._logger.debug(
+            f"Updating job status for job {self._job_id} to state "
+            f"{state.name}."
+        )
         self._col_ref.document(self._job_id).set(
             self._job_status_to_dict(
                 user_id=self._user_id,
