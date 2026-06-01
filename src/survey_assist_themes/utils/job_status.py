@@ -15,14 +15,11 @@ from survey_assist_utils.logging.logging_utils import VALID_LOG_LEVELS
 class _JobStateDetails:
     """Job state details.
 
-    Attributes
-    ----------
-    msg: str
-        A message describing the job state (human readable).
-    start: bool, optional
-        Whether this state represents the start of a job. Default is False.
-    end: bool, optional
-        Whether this state represents the end of a job. Default is False.
+    Attributes:
+        msg: A message describing the job state (human readable).
+        start: Whether this state represents the start of a job. Defaults to
+            False.
+        end: Whether this state represents the end of a job. Defaults to False.
     """
 
     msg: str
@@ -56,50 +53,45 @@ class JobState(Enum):
 class JobStatus:
     """Connect to a firestore db and create/update the status of a job.
 
-    Parameters
-    ----------
-    gcp_project_id : str
-        The GCP project ID where the firestore db is hosted.
-    firestore_db_name : str
-        The name of the firestore db to connect to.
-    job_id : str
-        A unique identifier for the job to track the status of.
-    user_id : str
-        A unique identifier for the user running the job.
-    log_level : str, optional
-        The logging level to use for the JobStatus class. Must be one of
-        "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL". Default is "INFO".
+    Args:
+        gcp_project_id: The GCP project ID where the firestore db is hosted.
+        firestore_db_name: The name of the firestore db to connect to.
+        job_id: A unique identifier for the job to track the status of.
+        user_id: A unique identifier for the user running the job.
+        log_level: The logging level to use for the JobStatus class. Must be
+            one of "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL". Default is
+            "INFO".
 
-    Methods
-    -------
-    update
-        Update the job status in the firestore db with a new status
-        information. See the method docstring for more details.
+    Attributes:
+        update: Update the job status in the firestore db with new status
+            information. See the method docstring for more details.
 
-    Raises
-    ------
-    ConnectionError
-        If there is an error connecting to the firestore db during
-        initialisation.
+    Raises:
+        ConnectionError: If there is an error connecting to the firestore db
+            during initialisation.
 
-    Examples
-    --------
-    A typical example usage of the JobStatus class:
-    >>> from survey_assist_themes.utils.job_status import JobStatus, JobState
-    >>> gcp_project_id = "MY_GCP_PROJECT_ID"
-    >>> firestore_db_name = "MY_FIRESTORE_DB_NAME"
-    >>> job_id = "my_unique_job_id"
-    >>> user_id = "my_unique_user_id"
-    >>> js = JobStatus(gcp_project_id, firestore_db_name, job_id, user_id)
-    >>> js.update(JobState.STARTED)
-     # Job status document created in firestore db with state "STARTED"
-    >>> js.update(JobState.IN_PROGRESS)
-     # Job status document updated in firestore db with state "IN_PROGRESS"
-    >>> js.update(JobState.COMPLETED)
-     # Job status document updated in firestore db with state "COMPLETED"
+    Examples:
+        A typical example usage of the JobStatus class:
 
-    Or, if an error occurs during the job
-    >>> js.update(JobState.FAILED, "A useful error message")
+            >>> from survey_assist_themes.utils.job_status import JobStatus,
+                JobState
+            >>> gcp_project_id = "MY_GCP_PROJECT_ID"
+            >>> firestore_db_name = "MY_FIRESTORE_DB_NAME"
+            >>> job_id = "my_unique_job_id"
+            >>> user_id = "my_unique_user_id"
+            >>> js = JobStatus(gcp_project_id, firestore_db_name, job_id,
+                user_id)
+            >>> js.update(JobState.STARTED)
+            # Job status document created in firestore db with state "STARTED"
+            >>> js.update(JobState.RUN_ANALYSIS)
+            # Job status document updated in firestore db with state
+            # "RUN_ANALYSIS"
+            >>> js.update(JobState.COMPLETED)
+            # Job status document updated in firestore db with state
+            # "COMPLETED"
+
+        Or, if an error occurs during the job:
+            >>> js.update(JobState.FAILED, "A useful error message")
     """
 
     _collection_name = "job_status"
@@ -202,7 +194,7 @@ class JobStatus:
     def update(self, state: JobState, err_msg: str = None):
         """Update a job status document in the firestore db.
 
-        A status document will include the following top level fields:
+        A status document will include the following top-level fields:
         - user_id: the user running the job (str)
         - updated_time: the time the status was updated (datetime)
         - state: the current state of the job (str, from JobState enum)
@@ -211,32 +203,29 @@ class JobStatus:
 
         Subsequent updates to the job status will additionally include:
         - history: a list of previous statuses (with their state, message, and
-        update times)
+            update times)
 
         At the end of the job, the following fields will be added:
         - end_time: the time the job ended (datetime, only for end states)
 
-        Parameters
-        ----------
-        state : JobState
-            The state to update the job status to.
-        err_msg : str, optional
-            An optional error message to include in the job status. Can only
-            be set when state is JobState.FAILED.
+        Args:
+            state: The state to update the job status to.
+            err_msg: An optional error message to include in the job status.
+                Can only be set when state is JobState.FAILED.
 
-        Raises
-        ------
-        ValueError
-            - If JobState.STARTING is provided and a job status document
-            already exists (prevent starting job twice).
-            - If a non-JobState.STARTING state is provided and no job status
-            already exists (i.e. an initial status update is missing)
-            would result in missing field information e.g. start_time).
-            - If an end state is provided but the existing job status suggests
-            the job has already ended (prevent modifying status of completed
-            jobs).
-            - If an error message is provided when the state is not
-            JobState.FAILED (reserved for failed jobs only).
+        Raises:
+            ValueError: If any of the following conditions are met:
+                - JobState.STARTED is provided and a job status document
+                already exists (prevents starting a job twice).
+                - A non-STARTED state is provided and no job status already
+                exists (an initial status update is missing, which would result
+                in missing field information like start_time).
+                - An end state is provided but the existing job status suggests
+                the job has already ended (prevents modifying the status of a
+                completed job).
+                - An error message is provided when the state is not
+                JobState.FAILED (error messages are reserved for failed jobs
+                only).
         """
         doc = self._col_ref.document(self._job_id).get(retry=self._retry)
         doc_dict = doc.to_dict() if doc.exists else {}
