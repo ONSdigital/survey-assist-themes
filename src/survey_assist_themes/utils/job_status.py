@@ -261,8 +261,8 @@ class JobStatus:
                 f"state is {state.name}. Expected an existing status if the "
                 f"state is not {JobState.STARTED.name}."
             )
-        # case end state but an end time already exists (can't end twice).
-        elif state.end and doc_dict.get("end_time") is not None:
+        # case job already ended (don't update/can't end twice).
+        elif doc_dict.get("end_time") is not None:
             raise ValueError(
                 f"Existing job status for {self._job_id} has an end_time and "
                 f"the provided state is {state.name}. Not updating to prevent "
