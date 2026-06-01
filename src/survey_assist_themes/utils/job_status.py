@@ -31,11 +31,12 @@ class _JobStateDetails:
 class JobState(Enum):
     """Possible discrete states for a job."""
 
-    STARTED = _JobStateDetails("Job has started", start=True)
-    # TODO: build on IN_PROGRESS to cover more specific states
-    IN_PROGRESS = _JobStateDetails("Job is in progress")
-    COMPLETED = _JobStateDetails("Job is completed", end=True)
-    FAILED = _JobStateDetails("Job has failed", end=True)
+    STARTED = _JobStateDetails("Started ThemeFinder job", start=True)
+    RUN_ANALYSIS = _JobStateDetails("Running ThemeFinder analysis")
+    RUN_POST_PROCESS = _JobStateDetails("Running ThemeFinder post-processing")
+    RUN_REPORT = _JobStateDetails("Running ThemeFinder report generation")
+    COMPLETED = _JobStateDetails("ThemeFinder job has completed", end=True)
+    FAILED = _JobStateDetails("ThemeFinder job has failed", end=True)
 
     @property
     def msg(self) -> str:
