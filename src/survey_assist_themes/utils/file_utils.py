@@ -542,75 +542,88 @@ def save_theme_csvs_to_gcs(
         logger.error(f"GCS operation failed: {e}", exc_info=True)
         raise GCSOperationError(f"Failed to save output to GCS: {e}") from e
 
+
 def rationalise_themefinder_output(data: dict[str, Any]) -> dict[str, Any]:
-    """Convert raw ThemeFinder output into the compact JSON schema."""
+    data = themefinder_output_to_serialisable(data)
 
-    themes_lookup: dict[str, Any] = {}
-    responses_lookup: dict[str, Any] = {}
+    themes: dict[str, Any] = {}
+    responses: dict[str, Any] = {}
 
+    # Themes
     for theme in data.get("themes", []):
-        topic_id = str(theme["topic_id"])
-        themes_lookup[topic_id] = {
+        theme_id = str(theme["topic_id"])
+        themes[theme_id] = {
             "topic": theme["topic"],
             "source_topic_count": theme["source_topic_count"],
         }
 
-    for mapping in data.get("mapping", []):
-        response_id = str(mapping["response_id"])
-        responses_lookup[response_id] = {
-            "text": mapping["response"],
+    # Base response objects from mapping
+    for item in data.get("mapping", []):
+        response_id = str(item["response_id"])
+
+        responses[response_id] = {
+            "text": item["response"],
             "sentiment": None,
             "evidence_rich": False,
-            "labels": mapping.get("labels", []),
+            "labels": item.get("labels", []),
             "processable": True,
         }
 
-    for sentiment in data.get("sentiment", []):
-        response_id = str(sentiment["response_id"])
-        responses_lookup.setdefault(
+    # Sentiment
+    for item in data.get("sentiment", []):
+        response_id = str(item["response_id"])
+
+        responses.setdefault(
             response_id,
             {
-                "text": sentiment["response"],
+                "text": item["response"],
                 "sentiment": None,
                 "evidence_rich": False,
                 "labels": [],
                 "processable": True,
             },
         )
-        responses_lookup[response_id]["sentiment"] = sentiment["position"]
 
-    for detail in data.get("detailed_responses", []):
-        response_id = str(detail["response_id"])
-        responses_lookup.setdefault(
+        responses[response_id]["sentiment"] = item["position"]
+
+    # Evidence-rich flag
+    for item in data.get("detailed_responses", []):
+        response_id = str(item["response_id"])
+
+        responses.setdefault(
             response_id,
             {
-                "text": detail["response"],
+                "text": item["response"],
                 "sentiment": None,
                 "evidence_rich": False,
                 "labels": [],
                 "processable": True,
             },
         )
-        responses_lookup[response_id]["evidence_rich"] = (
-            str(detail.get("evidence_rich", "")).upper() == "YES"
+
+        responses[response_id]["evidence_rich"] = (
+            str(item.get("evidence_rich", "")).upper() == "YES"
         )
 
-    for unprocessable in data.get("unprocessables", []):
-        response_id = str(unprocessable["response_id"])
-        responses_lookup.setdefault(
+    # Unprocessables
+    for item in data.get("unprocessables", []):
+        response_id = str(item["response_id"])
+
+        responses.setdefault(
             response_id,
             {
-                "text": unprocessable["response"],
+                "text": item["response"],
                 "sentiment": None,
                 "evidence_rich": False,
                 "labels": [],
                 "processable": False,
             },
         )
-        responses_lookup[response_id]["processable"] = False
+
+        responses[response_id]["processable"] = False
 
     return {
         "question": data.get("question"),
-        "responses": responses_lookup,
-        "themes": themes_lookup,
+        "responses": responses,
+        "themes": themes,
     }

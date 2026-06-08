@@ -120,52 +120,78 @@ def generate_report_stats(result: dict[str, Any]) -> str:
         Human-readable statistics text suitable for inclusion in a prompt.
     """
     themes = result.get("themes", [])
-    mapping = result.get("mapping", [])
-    sentiment_data = result.get("sentiment", [])
-    detail_data = result.get("detailed_responses", [])
-    unprocessables = result.get("unprocessables", [])
+    responses = result.get("responses", {})
 
-    total_responses = len(mapping)
-    total_unprocessables = len(unprocessables)
+    processable_responses = [
+        response for response in responses.values() if response.get("processable", True)
+    ]
+
+    unprocessable_responses = [
+        response for response in responses.values() if not response.get("processable", True)
+    ]
+
+    total_responses = len(responses)
+    total_processable = len(processable_responses)
+    total_unprocessables = len(unprocessable_responses)
 
     theme_counts: dict[str, int] = {}
-    for mapping_item in mapping:
-        for label in mapping_item.get("labels", []):
+
+    for response in processable_responses:
+        for label in response.get("labels", []):
             theme_counts[label] = theme_counts.get(label, 0) + 1
 
     themes_block = ""
-    for theme in themes:
-        topic_id = theme.get("topic_id")
+    for topic_id, theme in themes.items():
         count = theme_counts.get(topic_id, 0)
         percentage = (count / total_responses * 100) if total_responses > 0 else 0
         themes_block += (
             f"- [{topic_id}] {theme.get('topic')} | " f"Count: {count} ({percentage:.1f}%)\n"
         )
 
-    pos_count = sum(1 for item in sentiment_data if item.get("position") == "AGREEMENT")
-    neg_count = sum(1 for item in sentiment_data if item.get("position") == "DISAGREEMENT")
-    unclear_count = sum(1 for item in sentiment_data if item.get("position") == "UNCLEAR")
+    pos_count = sum(
+        1 for response in processable_responses if response.get("sentiment") == "AGREEMENT"
+    )
 
-    rich_count = sum(1 for item in detail_data if item.get("evidence_rich") == "YES")
-    non_rich_count = sum(1 for item in detail_data if item.get("evidence_rich") == "NO")
+    neg_count = sum(
+        1 for response in processable_responses if response.get("sentiment") == "DISAGREEMENT"
+    )
 
-    no_theme_count = sum(1 for item in mapping if not item.get("labels"))
-    no_theme_count_pct = (no_theme_count / total_responses * 100) if total_responses > 0 else 0
-    multi_theme_count = sum(1 for item in mapping if len(item.get("labels", [])) > 1)
+    unclear_count = sum(
+        1 for response in processable_responses if response.get("sentiment") == "UNCLEAR"
+    )
+
+    rich_count = sum(
+        1 for response in processable_responses if response.get("evidence_rich") is True
+    )
+
+    non_rich_count = sum(
+        1 for response in processable_responses if response.get("evidence_rich") is False
+    )
+
+    no_theme_count = sum(1 for response in processable_responses if not response.get("labels"))
+
+    no_theme_count_pct = no_theme_count / total_processable * 100 if total_processable > 0 else 0
+
+    multi_theme_count = sum(
+        1 for response in processable_responses if len(response.get("labels", [])) > 1
+    )
 
     return (
         "Response statistics:\n\n"
         "**Thematic Summary:**\n"
-        f"Total responses processed: {total_responses}\n"
+        f"Total responses: {total_responses}\n"
+        f"Total responses processed: {total_processable}\n"
         f"Total unprocessables: {total_unprocessables}\n"
         f"Themes identified and their frequency:\n{themes_block}\n"
         f"Responses not mapped to any theme: "
         f"{no_theme_count} ({no_theme_count_pct:.1f}%)\n"
         f"Responses mapped to multiple themes: {multi_theme_count}\n\n"
         "**Sentiment & Detail:**\n"
-        f"Sentiment: {pos_count} Agreement, {neg_count} Disagreement, "
+        f"Sentiment: {pos_count} Agreement, "
+        f"{neg_count} Disagreement, "
         f"{unclear_count} Unclear.\n"
-        f"Depth: {rich_count} evidence-rich, {non_rich_count} surface-level responses.\n\n"
+        f"Depth: {rich_count} evidence-rich, "
+        f"{non_rich_count} surface-level responses.\n\n"
         "Please provide a high-level summary that is accessible to non-data "
         "scientists, referring to specific examples from the JSON data to "
         "support the themes."

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import os
-from typing import Any, cast
+from typing import Any
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -68,15 +68,14 @@ async def _run_themefinder_with_retry(
     Raises:
         Exception: If ThemeFinder processing fails after all retries.
     """
-    raw_result: dict[str, Any] = await _run_themefinder_with_retry(
+    result: dict[str, Any] = await find_themes(
         responses_df,
         llm,
         question,
-        system_prompt,
+        system_prompt=system_prompt,
     )
-    result = rationalise_themefinder_output(raw_result)
 
-    return cast(dict[str, Any], result)
+    return result
 
 
 async def run() -> None:
@@ -166,8 +165,9 @@ async def run() -> None:
         output_path = f"output/{output_name}"
         mapping_path = f"output/{mapping_name}"
         logger.info(f"Saving results to GCS bucket: {output_bucket}, path: {output_path}")
+        compact_result = rationalise_themefinder_output(result)
         save_themefinder_output_to_gcs(
-            output=result,
+            output=compact_result,
             bucket_name=output_bucket,
             destination_blob_name=output_path,
         )
