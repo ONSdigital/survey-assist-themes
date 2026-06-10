@@ -1,6 +1,9 @@
 import pandas as pd
 
-from survey_assist_themes.utils.file_utils import build_theme_table_df
+from survey_assist_themes.utils.file_utils import (
+    build_theme_table_df,
+    rationalise_themefinder_output,
+)
 
 
 def test_build_theme_table_df() -> None:
@@ -69,3 +72,59 @@ def test_build_theme_table_df() -> None:
     expected = expected.sort_values(["response_id", "topic_id"], ignore_index=True)
 
     pd.testing.assert_frame_equal(actual, expected)
+
+
+def test_rationalise_themefinder_output() -> None:
+    data = {
+        "question": "How was your appointment?",
+        "themes": [
+            {
+                "topic_id": "A",
+                "topic": "Inadequate Appointment System",
+                "source_topic_count": 2,
+            }
+        ],
+        "mapping": [
+            {
+                "response_id": 1,
+                "response": "Impossible to get seen",
+                "labels": ["A"],
+            }
+        ],
+        "sentiment": [
+            {
+                "response_id": 1,
+                "response": "Impossible to get seen",
+                "position": "DISAGREEMENT",
+            }
+        ],
+        "detailed_responses": [
+            {
+                "response_id": 1,
+                "response": "Impossible to get seen",
+                "evidence_rich": "YES",
+            }
+        ],
+        "unprocessables": [],
+    }
+
+    actual = rationalise_themefinder_output(data)
+
+    assert actual == {
+        "question": "How was your appointment?",
+        "themes": {
+            "A": {
+                "topic": "Inadequate Appointment System",
+                "source_topic_count": 2,
+            }
+        },
+        "responses": {
+            "1": {
+                "text": "Impossible to get seen",
+                "sentiment": "DISAGREEMENT",
+                "evidence_rich": True,
+                "labels": ["A"],
+                "processable": True,
+            }
+        },
+    }

@@ -56,11 +56,17 @@ def base_config() -> dict[str, Any]:
 def themefinder_result() -> dict[str, Any]:
     """Fixture for typical ThemeFinder output."""
     return {
-        "themes": [{"topic_id": "A", "topic": "Theme A"}],
-        "mapping": [{"response_id": 1, "labels": ["A"]}],
-        "sentiment": [{"position": "AGREEMENT"}],
-        "detailed_responses": [{"evidence_rich": "YES"}],
-        "unprocessables": [],
+        "themes": {
+            "A": {"topic": "Theme A"},
+        },
+        "responses": {
+            "1": {
+                "labels": ["A"],
+                "sentiment": "AGREEMENT",
+                "evidence_rich": True,
+                "processable": True,
+            }
+        },
     }
 
 
@@ -68,23 +74,24 @@ def themefinder_result() -> dict[str, Any]:
 def integration_themefinder_result() -> dict[str, Any]:
     """Fixture for realistic ThemeFinder output for integration tests."""
     return {
-        "themes": [
-            {"topic_id": "A", "topic": "Inadequate Appointment System"},
-            {"topic_id": "B", "topic": "Consultation Experience"},
-        ],
-        "mapping": [
-            {"response_id": 1, "labels": ["A"]},
-            {"response_id": 2, "labels": ["A", "B"]},
-        ],
-        "sentiment": [
-            {"position": "AGREEMENT"},
-            {"position": "DISAGREEMENT"},
-        ],
-        "detailed_responses": [
-            {"evidence_rich": "YES"},
-            {"evidence_rich": "YES"},
-        ],
-        "unprocessables": [],
+        "themes": {
+            "A": {"topic": "Inadequate Appointment System"},
+            "B": {"topic": "Consultation Experience"},
+        },
+        "responses": {
+            "1": {
+                "labels": ["A"],
+                "sentiment": "AGREEMENT",
+                "evidence_rich": True,
+                "processable": True,
+            },
+            "2": {
+                "labels": ["A", "B"],
+                "sentiment": "DISAGREEMENT",
+                "evidence_rich": True,
+                "processable": True,
+            },
+        },
     }
 
 
@@ -217,47 +224,51 @@ class TestGenerateReportStats:
     def test_generate_report_stats_basic(self) -> None:
         """Test basic stats generation."""
         result = {
-            "themes": [
-                {"topic_id": "A", "topic": "Theme A"},
-                {"topic_id": "B", "topic": "Theme B"},
-            ],
-            "mapping": [
-                {"response_id": 1, "labels": ["A"]},
-                {"response_id": 2, "labels": ["A", "B"]},
-                {"response_id": 3, "labels": []},
-            ],
-            "sentiment": [
-                {"position": "AGREEMENT"},
-                {"position": "DISAGREEMENT"},
-                {"position": "UNCLEAR"},
-            ],
-            "detailed_responses": [
-                {"evidence_rich": "YES"},
-                {"evidence_rich": "NO"},
-                {"evidence_rich": "YES"},
-            ],
-            "unprocessables": [{"error": "invalid"}],
+            "themes": {
+                "A": {"topic": "Theme A"},
+                "B": {"topic": "Theme B"},
+            },
+            "responses": {
+                "1": {
+                    "labels": ["A"],
+                    "sentiment": "AGREEMENT",
+                    "evidence_rich": True,
+                    "processable": True,
+                },
+                "2": {
+                    "labels": ["A", "B"],
+                    "sentiment": "DISAGREEMENT",
+                    "evidence_rich": False,
+                    "processable": True,
+                },
+                "3": {
+                    "labels": [],
+                    "sentiment": "UNCLEAR",
+                    "evidence_rich": True,
+                    "processable": True,
+                },
+                "4": {
+                    "processable": False,
+                },
+            },
         }
 
         stats = generate_report_stats(result)
 
+        assert "Total responses: 4" in stats
         assert "Total responses processed: 3" in stats
         assert "Total unprocessables: 1" in stats
-        assert "[A] Theme A | Count: 2 (66.7%)" in stats
-        assert "[B] Theme B | Count: 1 (33.3%)" in stats
+        assert "[A] Theme A | Count: 2 (50.0%)" in stats
+        assert "[B] Theme B | Count: 1 (25.0%)" in stats
         assert "Responses not mapped to any theme: 1 (33.3%)" in stats
         assert "Responses mapped to multiple themes: 1" in stats
         assert "Sentiment: 1 Agreement, 1 Disagreement, 1 Unclear" in stats
         assert "Depth: 2 evidence-rich, 1 surface-level" in stats
 
     def test_generate_report_stats_empty(self) -> None:
-        """Test stats with empty data."""
-        result: dict[str, list[Any]] = {
-            "themes": [],
-            "mapping": [],
-            "sentiment": [],
-            "detailed_responses": [],
-            "unprocessables": [],
+        result: dict[str, dict[str, dict[str, Any]]] = {
+            "themes": {},
+            "responses": {},
         }
 
         stats = generate_report_stats(result)
@@ -269,36 +280,40 @@ class TestGenerateReportStats:
     def test_generate_report_stats_no_divisions_by_zero(self) -> None:
         """Test that stats handles zero responses without division errors."""
         result = {
-            "themes": [{"topic_id": "A", "topic": "Theme"}],
-            "mapping": [],
-            "sentiment": [],
-            "detailed_responses": [],
-            "unprocessables": [],
+            "themes": {
+                "A": {"topic": "Theme"},
+            },
+            "responses": {},
         }
 
         stats = generate_report_stats(result)
+
         assert "Total responses processed: 0" in stats
 
     def test_generate_report_stats_all_agreement(self) -> None:
         """Test stats when all sentiments are agreement."""
         result = {
-            "themes": [{"topic_id": "A", "topic": "Theme A"}],
-            "mapping": [
-                {"response_id": 1, "labels": ["A"]},
-                {"response_id": 2, "labels": ["A"]},
-            ],
-            "sentiment": [
-                {"position": "AGREEMENT"},
-                {"position": "AGREEMENT"},
-            ],
-            "detailed_responses": [
-                {"evidence_rich": "YES"},
-                {"evidence_rich": "YES"},
-            ],
-            "unprocessables": [],
+            "themes": {
+                "A": {"topic": "Theme A"},
+            },
+            "responses": {
+                "1": {
+                    "labels": ["A"],
+                    "sentiment": "AGREEMENT",
+                    "evidence_rich": True,
+                    "processable": True,
+                },
+                "2": {
+                    "labels": ["A"],
+                    "sentiment": "AGREEMENT",
+                    "evidence_rich": True,
+                    "processable": True,
+                },
+            },
         }
 
         stats = generate_report_stats(result)
+
         assert "Sentiment: 2 Agreement, 0 Disagreement, 0 Unclear" in stats
 
 
@@ -511,32 +526,38 @@ class TestIntegration:
     def test_full_workflow_with_multiple_themes(self, single_report_config: dict[str, Any]) -> None:
         """Test workflow handles multiple themes correctly."""
         themefinder_result = {
-            "themes": [
-                {"topic_id": "A", "topic": "Theme A"},
-                {"topic_id": "B", "topic": "Theme B"},
-                {"topic_id": "C", "topic": "Theme C"},
-            ],
-            "mapping": [
-                {"response_id": 1, "labels": ["A"]},
-                {"response_id": 2, "labels": ["B"]},
-                {"response_id": 3, "labels": ["C"]},
-                {"response_id": 4, "labels": ["A", "B"]},
-            ],
-            "sentiment": [
-                {"position": "AGREEMENT"},
-                {"position": "DISAGREEMENT"},
-                {"position": "UNCLEAR"},
-                {"position": "AGREEMENT"},
-            ],
-            "detailed_responses": [
-                {"evidence_rich": "YES"},
-                {"evidence_rich": "NO"},
-                {"evidence_rich": "YES"},
-                {"evidence_rich": "YES"},
-            ],
-            "unprocessables": [],
+            "themes": {
+                "A": {"topic": "Theme A"},
+                "B": {"topic": "Theme B"},
+                "C": {"topic": "Theme C"},
+            },
+            "responses": {
+                "1": {
+                    "labels": ["A"],
+                    "sentiment": "AGREEMENT",
+                    "evidence_rich": True,
+                    "processable": True,
+                },
+                "2": {
+                    "labels": ["B"],
+                    "sentiment": "DISAGREEMENT",
+                    "evidence_rich": False,
+                    "processable": True,
+                },
+                "3": {
+                    "labels": ["C"],
+                    "sentiment": "UNCLEAR",
+                    "evidence_rich": True,
+                    "processable": True,
+                },
+                "4": {
+                    "labels": ["A", "B"],
+                    "sentiment": "AGREEMENT",
+                    "evidence_rich": True,
+                    "processable": True,
+                },
+            },
         }
-
         with patch(
             "survey_assist_themes.report_generator.load_json_from_gcs",
             return_value=themefinder_result,
