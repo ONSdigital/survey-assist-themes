@@ -32,3 +32,12 @@ repos:
       args: [ --fix ]
     # Run the formatter.
     - id: ruff-format
+
+# ---- Pylint etc from Makefile ----
+- repo: local
+  hooks:
+    - id: make-check-python
+      name: make check-python
+      entry: make check-python
+      language: system
+      types: [python]

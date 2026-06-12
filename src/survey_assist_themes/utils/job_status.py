@@ -3,6 +3,7 @@
 import datetime
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 from firebase_admin import firestore, get_app, initialize_app
 from google.api_core.exceptions import ServiceUnavailable
@@ -155,11 +156,11 @@ class JobStatus:
     def _job_status_to_dict(
         user_id: str,
         state: JobState,
-        start_time: datetime.datetime = None,
-        end_time: datetime.datetime = None,
-        history: list[dict] = None,
-        err_msg: str = None,
-    ):
+        start_time: datetime.datetime | None = None,
+        end_time: datetime.datetime | None = None,
+        history: list[dict[str, Any]] | None = None,
+        err_msg: str | None = None,
+    ) -> dict[str, Any]:
         """Convert job status information to a dictionary for firestore."""
         now = datetime.datetime.now(tz=datetime.UTC)
         job_status = {
@@ -178,7 +179,7 @@ class JobStatus:
             job_status["err_msg"] = err_msg
         return job_status
 
-    def update(self, state: JobState, err_msg: str = None):
+    def update(self, state: JobState, err_msg: str | None = None) -> None:
         """Update a job status document in the firestore db.
 
         A status document will include the following top-level fields:
