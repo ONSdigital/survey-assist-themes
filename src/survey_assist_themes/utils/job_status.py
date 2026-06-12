@@ -116,10 +116,7 @@ class JobStatus:
         self._job_id = job_id
         self._user_id = user_id
         if log_level not in VALID_LOG_LEVELS:
-            raise ValueError(
-                f"log_level must be one of {VALID_LOG_LEVELS}, but got "
-                f"{log_level}."
-            )
+            raise ValueError(f"log_level must be one of {VALID_LOG_LEVELS}, but got {log_level}.")
         self._logger = get_logger(__name__, log_level)
 
         # Initialise Firestore connection
@@ -134,29 +131,19 @@ class JobStatus:
         # this can happen during dev when calling __init__ multiple times
         except ValueError as e:
             if "The default Firebase app already exists" in str(e):
-                self._logger.warning(
-                    "Default Firebase app already exists. Using existing app."
-                )
+                self._logger.warning("Default Firebase app already exists. Using existing app.")
                 app = get_app()
             else:
-                raise ValueError(
-                    f"Error during firestore initialisation: {e}"
-                ) from e
+                raise ValueError(f"Error during firestore initialisation: {e}") from e
 
-        self._db = firestore.client(
-            app=app, database_id=self._firestore_db_name
-        )
+        self._db = firestore.client(app=app, database_id=self._firestore_db_name)
 
         # non-intrusive test to verify db connection - list all collections
         try:
             _ = list(self._db.collections(retry=self._retry))
-            self._logger.debug(
-                "Non-intrusive test to verify db connection succeeded."
-            )
+            self._logger.debug("Non-intrusive test to verify db connection succeeded.")
         except Exception as e:
-            raise ConnectionError(
-                f"Error when connecting to Firestore: {e}"
-            ) from e
+            raise ConnectionError(f"Error when connecting to Firestore: {e}") from e
 
         self._col_ref = self._db.collection(self._collection_name)
         self._logger.debug(
@@ -231,9 +218,7 @@ class JobStatus:
         doc_dict = doc.to_dict() if doc.exists else {}
         now = datetime.datetime.now(tz=datetime.UTC)
         self._logger.debug(f"Provided state for update: {state.name}.")
-        self._logger.debug(
-            f"Firestore doc for job {self._job_id} exists: {doc.exists}."
-        )
+        self._logger.debug(f"Firestore doc for job {self._job_id} exists: {doc.exists}.")
 
         # these cases handle unintentional misuse of state in upstream logic
         # case start state but status already exists
@@ -282,10 +267,7 @@ class JobStatus:
             history = None
 
         # upset the job status document with latest state information
-        self._logger.debug(
-            f"Updating job status for job {self._job_id} to state "
-            f"{state.name}."
-        )
+        self._logger.debug(f"Updating job status for job {self._job_id} to state {state.name}.")
         self._col_ref.document(self._job_id).set(
             self._job_status_to_dict(
                 user_id=self._user_id,
