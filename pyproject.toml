@@ -49,7 +49,7 @@ profile = "black"
 
 [tool.ruff]
 src = ["src", "tests"]
-line-length = 79
+line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
