@@ -33,7 +33,6 @@ from survey_assist_themes.report_generator import generate_reports
 from survey_assist_themes.utils.file_utils import (
     load_feedback_csv_from_gcs,
     make_timestamped_blob_names,
-    rationalise_themefinder_output,
     save_theme_csvs_to_gcs,
     save_themefinder_output_to_gcs,
 )
@@ -165,9 +164,8 @@ async def run() -> None:
         output_path = f"output/{output_name}"
         mapping_path = f"output/{mapping_name}"
         logger.info(f"Saving results to GCS bucket: {output_bucket}, path: {output_path}")
-        compact_result = rationalise_themefinder_output(result)
         save_themefinder_output_to_gcs(
-            output=compact_result,
+            output=result,
             bucket_name=output_bucket,
             destination_blob_name=output_path,
         )
