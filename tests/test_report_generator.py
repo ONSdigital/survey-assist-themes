@@ -260,7 +260,7 @@ class TestGenerateReportStats:
         assert "Total unprocessables: 1" in stats
         assert "[A] Theme A | Count: 2 (50.0%)" in stats
         assert "[B] Theme B | Count: 1 (25.0%)" in stats
-        assert "Responses not mapped to any theme: 1 (33.3%)" in stats
+        assert "Responses not mapped to any theme: 1 (25.0%)" in stats
         assert "Responses mapped to multiple themes: 1" in stats
         assert "Sentiment: 1 Agreement, 1 Disagreement, 1 Unclear" in stats
         assert "Depth: 2 evidence-rich, 1 surface-level" in stats

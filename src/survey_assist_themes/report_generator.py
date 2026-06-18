@@ -170,7 +170,7 @@ def generate_report_stats(result: dict[str, Any]) -> str:
 
     no_theme_count = sum(1 for response in processable_responses if not response.get("labels"))
 
-    no_theme_count_pct = no_theme_count / total_processable * 100 if total_processable > 0 else 0
+    no_theme_count_pct = no_theme_count / total_responses * 100 if total_responses > 0 else 0
 
     multi_theme_count = sum(
         1 for response in processable_responses if len(response.get("labels", [])) > 1
