@@ -482,21 +482,36 @@ def build_theme_table_df(result: dict[str, Any], id_mapping_df: pd.DataFrame) ->
     Returns:
         A DataFrame representing the theme table.
     """
-    mapping_df = pd.DataFrame(result["mapping"]).explode("labels")
-    themes_df = pd.DataFrame(result["themes"]).rename(columns={"topic": "theme_description"})
-    id_lookup_df = id_mapping_df[["response_id", "original_id"]].copy()
+    rows: list[dict[str, Any]] = []
 
-    theme_table = (
-        mapping_df.rename(columns={"labels": "topic_id"})
-        .merge(
-            themes_df[["topic_id", "theme_description"]],
-            on="topic_id",
-            how="left",
-        )
-        .merge(id_lookup_df, on="response_id", how="left")
+    themes = result.get("themes", {})
+    responses = result.get("responses", {})
+
+    original_id_lookup = {
+        str(row.response_id): row.original_id
+        for row in id_mapping_df[["response_id", "original_id"]].itertuples(index=False)
+    }
+
+    for response_id, response in responses.items():
+        labels = response.get("labels", [])
+
+        for topic_id in labels:
+            theme = themes.get(str(topic_id), {})
+
+            rows.append(
+                {
+                    "response_id": int(response_id),
+                    "original_id": original_id_lookup.get(str(response_id)),
+                    "response": response.get("text"),
+                    "theme_description": theme.get("topic"),
+                    "topic_id": str(topic_id),
+                }
+            )
+
+    return pd.DataFrame(
+        rows,
+        columns=["response_id", "original_id", "response", "theme_description", "topic_id"],
     )
-
-    return theme_table[["response_id", "original_id", "response", "theme_description", "topic_id"]]
 
 
 def save_theme_csvs_to_gcs(

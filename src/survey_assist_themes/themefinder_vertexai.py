@@ -184,7 +184,7 @@ async def run() -> None:
         if generate_themes_csv:
             logger.info("Generating Themes Tables to CSV Files")
             save_theme_csvs_to_gcs(
-                result=result,
+                result=compact_result,
                 id_mapping_df=id_mapping_df,
                 bucket_name=output_bucket,
                 output_name=output_name,

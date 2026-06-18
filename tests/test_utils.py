@@ -8,28 +8,33 @@ from survey_assist_themes.utils.file_utils import (
 
 def test_build_theme_table_df() -> None:
     result = {
-        "mapping": [
-            {
-                "response_id": 1,
-                "response": "Impossible to get seen",
+        "question": "Why did you rate your GP practice experience as poor?",
+        "responses": {
+            "1": {
+                "text": "Impossible to get seen",
+                "sentiment": "NEGATIVE",
+                "evidence_rich": True,
                 "labels": ["A"],
+                "processable": True,
             },
-            {
-                "response_id": 2,
-                "response": "Phones always engaged",
+            "2": {
+                "text": "Phones always engaged",
+                "sentiment": "NEGATIVE",
+                "evidence_rich": True,
                 "labels": ["A", "B"],
+                "processable": True,
             },
-        ],
-        "themes": [
-            {
-                "topic_id": "A",
+        },
+        "themes": {
+            "A": {
                 "topic": "Inadequate Appointment System",
+                "source_topic_count": 2,
             },
-            {
-                "topic_id": "B",
+            "B": {
                 "topic": "Consultation Experience",
+                "source_topic_count": 1,
             },
-        ],
+        },
     }
 
     id_mapping_df = pd.DataFrame(
