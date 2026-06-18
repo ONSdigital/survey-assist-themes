@@ -37,7 +37,6 @@ from survey_assist_themes.exceptions import (
 )
 from survey_assist_themes.utils.file_utils import (
     load_json_from_gcs,
-    rationalise_themefinder_output,
     save_markdown_report_to_gcs,
 )
 
@@ -439,15 +438,9 @@ async def generate_reports(
     input_bucket, blob_name = path.split("/", 1)
 
     result = load_json_from_gcs(input_bucket, blob_name)
-    compact_result = rationalise_themefinder_output(result)
-
-    json_bytes = json.dumps(
-        result,
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode("utf-8")
+    json_bytes = json.dumps(result, ensure_ascii=False, indent=2).encode("utf-8")
     json_part = Part.from_data(data=json_bytes, mime_type="text/plain")
-    stats_text = generate_report_stats(compact_result)
+    stats_text = generate_report_stats(result)
 
     config = get_report_config(config_path=config_path)
 

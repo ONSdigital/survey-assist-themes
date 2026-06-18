@@ -20,7 +20,6 @@ from survey_assist_themes.report_generator import (
     generate_reports,
     get_report_config,
 )
-from survey_assist_themes.utils.file_utils import rationalise_themefinder_output
 
 
 def mock_vertex_response(
@@ -57,36 +56,17 @@ def base_config() -> dict[str, Any]:
 def themefinder_result() -> dict[str, Any]:
     """Fixture for typical ThemeFinder output."""
     return {
-        "question": "Why did you rate your nursing service as good or very good?",
-        "themes": [
-            {
-                "topic_id": "A",
-                "topic": "Theme A",
-                "source_topic_count": 1,
-            }
-        ],
-        "mapping": [
-            {
-                "response_id": 1,
-                "response": "Friendly informative and helpful",
+        "themes": {
+            "A": {"topic": "Theme A"},
+        },
+        "responses": {
+            "1": {
                 "labels": ["A"],
+                "sentiment": "AGREEMENT",
+                "evidence_rich": True,
+                "processable": True,
             }
-        ],
-        "sentiment": [
-            {
-                "response_id": 1,
-                "response": "Friendly informative and helpful",
-                "position": "AGREEMENT",
-            }
-        ],
-        "detailed_responses": [
-            {
-                "response_id": 1,
-                "response": "Friendly informative and helpful",
-                "evidence_rich": "YES",
-            }
-        ],
-        "unprocessables": [],
+        },
     }
 
 
@@ -94,18 +74,24 @@ def themefinder_result() -> dict[str, Any]:
 def integration_themefinder_result() -> dict[str, Any]:
     """Fixture for realistic ThemeFinder output for integration tests."""
     return {
-        "themes": [
-            {
-                "topic_id": "A",
-                "topic": "Inadequate Appointment System",
-                "source_topic_count": 1,
+        "themes": {
+            "A": {"topic": "Inadequate Appointment System"},
+            "B": {"topic": "Consultation Experience"},
+        },
+        "responses": {
+            "1": {
+                "labels": ["A"],
+                "sentiment": "AGREEMENT",
+                "evidence_rich": True,
+                "processable": True,
             },
-            {
-                "topic_id": "B",
-                "topic": "Consultation Experience",
-                "source_topic_count": 1,
+            "2": {
+                "labels": ["A", "B"],
+                "sentiment": "DISAGREEMENT",
+                "evidence_rich": True,
+                "processable": True,
             },
-        ],
+        },
     }
 
 
@@ -330,47 +316,6 @@ class TestGenerateReportStats:
 
         assert "Sentiment: 2 Agreement, 0 Disagreement, 0 Unclear" in stats
 
-    def test_generate_reports_rationalises_themefinder_output(
-        self, themefinder_result: dict[str, Any], single_report_config: dict[str, Any]
-    ) -> None:
-        compact_result = rationalise_themefinder_output(themefinder_result)
-
-        with patch("survey_assist_themes.report_generator.load_json_from_gcs") as mock_load:
-            mock_load.return_value = themefinder_result
-
-            with patch(
-                "survey_assist_themes.report_generator.rationalise_themefinder_output",
-                return_value=compact_result,
-            ) as mock_rationalise:
-                with patch(
-                    "survey_assist_themes.report_generator.generate_report_stats"
-                ) as mock_stats:
-                    mock_stats.return_value = "Statistics summary"
-
-                    with patch(
-                        "survey_assist_themes.report_generator.get_report_config"
-                    ) as mock_config:
-                        mock_config.return_value = single_report_config
-
-                        with patch("vertexai.init"):
-                            with patch("survey_assist_themes.report_generator.GenerativeModel"):
-                                with patch(
-                                    "survey_assist_themes.report_generator._generate_single_report"
-                                ):
-                                    asyncio.run(
-                                        generate_reports(
-                                            themefinder_output_path="gs://bucket/output.json",
-                                            question="Test question?",
-                                            output_bucket="output-bucket",
-                                            project="test-project",
-                                            location="europe-west2",
-                                            config_path="gs://bucket/report_config.json",
-                                        )
-                                    )
-
-        mock_rationalise.assert_called_once_with(themefinder_result)
-        mock_stats.assert_called_once_with(compact_result)
-
 
 class TestGenerateSingleReport:
     """Tests for _generate_single_report async function."""
@@ -581,46 +526,37 @@ class TestIntegration:
     def test_full_workflow_with_multiple_themes(self, single_report_config: dict[str, Any]) -> None:
         """Test workflow handles multiple themes correctly."""
         themefinder_result = {
-            "themes": [
-                {
-                    "topic_id": "A",
-                    "topic": "Theme A",
-                    "source_topic_count": 1,
+            "themes": {
+                "A": {"topic": "Theme A"},
+                "B": {"topic": "Theme B"},
+                "C": {"topic": "Theme C"},
+            },
+            "responses": {
+                "1": {
+                    "labels": ["A"],
+                    "sentiment": "AGREEMENT",
+                    "evidence_rich": True,
+                    "processable": True,
                 },
-                {
-                    "topic_id": "B",
-                    "topic": "Theme B",
-                    "source_topic_count": 1,
+                "2": {
+                    "labels": ["B"],
+                    "sentiment": "DISAGREEMENT",
+                    "evidence_rich": False,
+                    "processable": True,
                 },
-                {
-                    "topic_id": "C",
-                    "topic": "Theme C",
-                    "source_topic_count": 1,
+                "3": {
+                    "labels": ["C"],
+                    "sentiment": "UNCLEAR",
+                    "evidence_rich": True,
+                    "processable": True,
                 },
-            ],
-            "mapping": [
-                {"response_id": 1, "response": "Friendly and professional", "labels": ["A"]},
-                {"response_id": 2, "response": "Seen promptly", "labels": ["B"]},
-                {"response_id": 3, "response": "Annual health check", "labels": ["C"]},
-                {"response_id": 4, "response": "Friendly and prompt", "labels": ["A", "B"]},
-            ],
-            "sentiment": [
-                {
-                    "response_id": 1,
-                    "response": "Friendly and professional",
-                    "position": "AGREEMENT",
+                "4": {
+                    "labels": ["A", "B"],
+                    "sentiment": "AGREEMENT",
+                    "evidence_rich": True,
+                    "processable": True,
                 },
-                {"response_id": 2, "response": "Seen promptly", "position": "DISAGREEMENT"},
-                {"response_id": 3, "response": "Annual health check", "position": "UNCLEAR"},
-                {"response_id": 4, "response": "Friendly and prompt", "position": "AGREEMENT"},
-            ],
-            "detailed_responses": [
-                {"response_id": 1, "response": "Friendly and professional", "evidence_rich": "YES"},
-                {"response_id": 2, "response": "Seen promptly", "evidence_rich": "NO"},
-                {"response_id": 3, "response": "Annual health check", "evidence_rich": "YES"},
-                {"response_id": 4, "response": "Friendly and prompt", "evidence_rich": "YES"},
-            ],
-            "unprocessables": [],
+            },
         }
         with patch(
             "survey_assist_themes.report_generator.load_json_from_gcs",
