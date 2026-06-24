@@ -495,6 +495,9 @@ def build_theme_table_df(result: dict[str, Any], id_mapping_df: pd.DataFrame) ->
     for response_id, response in responses.items():
         labels = response.get("labels", [])
 
+        if not labels:
+            continue
+
         for topic_id in labels:
             theme = themes.get(str(topic_id), {})
 
