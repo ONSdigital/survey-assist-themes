@@ -499,7 +499,11 @@ def build_theme_table_df(result: dict[str, Any], id_mapping_df: pd.DataFrame) ->
             continue
 
         for topic_id in labels:
-            theme = themes.get(str(topic_id), {})
+            topic_id = str(topic_id)
+
+            theme = themes.get(topic_id)
+            if theme is None:
+                continue
 
             rows.append(
                 {
@@ -507,7 +511,7 @@ def build_theme_table_df(result: dict[str, Any], id_mapping_df: pd.DataFrame) ->
                     "original_id": original_id_lookup.get(str(response_id)),
                     "response": response.get("text"),
                     "theme_description": theme.get("topic"),
-                    "topic_id": str(topic_id),
+                    "topic_id": topic_id,
                 }
             )
 
