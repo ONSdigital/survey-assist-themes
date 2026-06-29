@@ -495,6 +495,7 @@ def build_theme_table_df(result: dict[str, Any], id_mapping_df: pd.DataFrame) ->
     for response_id, response in responses.items():
         labels = response.get("labels", [])
 
+        # Response is not mapped to a theme if the response is ambiguous or short in nature.
         if not labels:
             continue
 
@@ -503,6 +504,11 @@ def build_theme_table_df(result: dict[str, Any], id_mapping_df: pd.DataFrame) ->
 
             theme = themes.get(topic_id)
             if theme is None:
+                logger.warning(
+                    "Skipping response_id=%s because topic_id=%s was not found in themes",
+                    response_id,
+                    topic_id,
+                )
                 continue
 
             rows.append(
