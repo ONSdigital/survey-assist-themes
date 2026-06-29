@@ -16,6 +16,7 @@ dependencies = [
     "google-cloud-storage>=2.18.0,<3.0.0",
     "survey-assist-utils @ git+https://github.com/ONSdigital/survey-assist-utils.git@v0.0.1",
     "firebase-admin>=6.5.0,<7.0.0",
+    "google-genai (>=2.10.0,<3.0.0)",
 ]
 
 [project.optional-dependencies]
