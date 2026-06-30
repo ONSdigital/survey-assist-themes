@@ -96,88 +96,33 @@ The first file is the JSON formatted output from ThemeFinder. And is structured 
 
 ```json
 {
-  "question": "Do you have any other feedback about this survey?",
-  "sentiment": [
-    {
-      "response_id": 4521,
-      "response": "No ",
-      "position": "UNCLEAR"
+  "question": "Why did you rate your GP practice experience as poor?",
+  "responses": {
+    "1": {
+      "text": "Garbage.",
+      "sentiment": "UNCLEAR",
+      "evidence_rich": false,
+      "labels": ["D"],
+      "processable": true
     },
-    {
-      "response_id": 417,
-      "response": "All great",
-      "position": "AGREEMENT"
-    },
-    {
-      "response_id": 2303,
-      "response": "none",
-      "position": "UNCLEAR"
-    },
-    {
-      "response_id": 1885,
-      "response": "Very easy to navigate",
-      "position": "AGREEMENT"
-    },
-    ...
-  ],
-  "themes": [
-    {
-      "topic": "Survey design is effective: The survey is easy to navigate, complete, and understand, featuring clear, concise, and well-designed questions, and suitable automated follow-up questions.",
-      "source_topic_count": 8,
-      "topic_id": "A"
-    },
-    ...
-  ],
-  "mapping": [
-    {
-      "response_id": 4521,
-      "response": "No ",
-      "labels": [
-        "G"
-      ]
-    },
-    {
-      "response_id": 417,
-      "response": "All great",
-      "labels": [
-        "A"
-      ]
-    },
-    {
-      "response_id": 2303,
-      "response": "none",
-      "labels": [
-        "G"
-      ]
-    },
-    {
-      "response_id": 1885,
-      "response": "Very easy to navigate",
-      "labels": [
-        "A",
-        "B"
-      ]
-    }],
-    ...
-    "detailed_responses": [
-    {
-      "response_id": 4521,
-      "response": "No ",
-      "evidence_rich": "NO"
-    },
-    {
-      "response_id": 417,
-      "response": "All great",
-      "evidence_rich": "NO"
-    },
-    ...
-    ],
-  "unprocessables": [
-    {
-      "response_id": 5323,
-      "response": "I have to think a bit but what can you do. "
+    "3": {
+      "text": "Just bad",
+      "sentiment": "UNCLEAR",
+      "evidence_rich": false,
+      "labels": [],
+      "processable": false
     }
-  ]
+  },
+  "themes": {
+    "A": {
+      "topic": "Appointment access is difficult: Patients experience significant challenges...",
+      "source_topic_count": 1
+    },
+    "B": {
+      "topic": "Clinical care quality is poor: Clinical consultations are often rushed...",
+      "source_topic_count": 2
+    }
+  }
 }
 ```
 

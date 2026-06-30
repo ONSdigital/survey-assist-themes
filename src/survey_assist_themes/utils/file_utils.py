@@ -482,21 +482,49 @@ def build_theme_table_df(result: dict[str, Any], id_mapping_df: pd.DataFrame) ->
     Returns:
         A DataFrame representing the theme table.
     """
-    mapping_df = pd.DataFrame(result["mapping"]).explode("labels")
-    themes_df = pd.DataFrame(result["themes"]).rename(columns={"topic": "theme_description"})
-    id_lookup_df = id_mapping_df[["response_id", "original_id"]].copy()
+    rows: list[dict[str, Any]] = []
 
-    theme_table = (
-        mapping_df.rename(columns={"labels": "topic_id"})
-        .merge(
-            themes_df[["topic_id", "theme_description"]],
-            on="topic_id",
-            how="left",
-        )
-        .merge(id_lookup_df, on="response_id", how="left")
+    themes = result.get("themes", {})
+    responses = result.get("responses", {})
+
+    original_id_lookup = {
+        str(row.response_id): row.original_id
+        for row in id_mapping_df[["response_id", "original_id"]].itertuples(index=False)
+    }
+
+    for response_id, response in responses.items():
+        labels = response.get("labels", [])
+
+        # Response is not mapped to a theme if the response is ambiguous or short in nature.
+        if not labels:
+            continue
+
+        for topic_id in labels:
+            topic_id = str(topic_id)
+
+            theme = themes.get(topic_id)
+            if theme is None:
+                logger.warning(
+                    "Skipping response_id=%s because topic_id=%s was not found in themes",
+                    response_id,
+                    topic_id,
+                )
+                continue
+
+            rows.append(
+                {
+                    "response_id": int(response_id),
+                    "original_id": original_id_lookup.get(str(response_id)),
+                    "response": response.get("text"),
+                    "theme_description": theme.get("topic"),
+                    "topic_id": topic_id,
+                }
+            )
+
+    return pd.DataFrame(
+        rows,
+        columns=["response_id", "original_id", "response", "theme_description", "topic_id"],
     )
-
-    return theme_table[["response_id", "original_id", "response", "theme_description", "topic_id"]]
 
 
 def save_theme_csvs_to_gcs(
@@ -541,3 +569,89 @@ def save_theme_csvs_to_gcs(
     except GoogleCloudError as e:
         logger.error(f"GCS operation failed: {e}", exc_info=True)
         raise GCSOperationError(f"Failed to save output to GCS: {e}") from e
+
+
+def rationalise_themefinder_output(data: dict[str, Any]) -> dict[str, Any]:
+    data = themefinder_output_to_serialisable(data)
+
+    themes: dict[str, Any] = {}
+    responses: dict[str, Any] = {}
+
+    # Themes
+    for theme in data.get("themes", []):
+        theme_id = str(theme["topic_id"])
+        themes[theme_id] = {
+            "topic": theme["topic"],
+            "source_topic_count": theme["source_topic_count"],
+        }
+
+    # Base response objects from mapping
+    for item in data.get("mapping", []):
+        response_id = str(item["response_id"])
+
+        responses[response_id] = {
+            "text": item["response"],
+            "sentiment": None,
+            "evidence_rich": False,
+            "labels": item.get("labels", []),
+            "processable": True,
+        }
+
+    # Sentiment
+    for item in data.get("sentiment", []):
+        response_id = str(item["response_id"])
+
+        responses.setdefault(
+            response_id,
+            {
+                "text": item["response"],
+                "sentiment": None,
+                "evidence_rich": False,
+                "labels": [],
+                "processable": True,
+            },
+        )
+
+        responses[response_id]["sentiment"] = item["position"]
+
+    # Evidence-rich flag
+    for item in data.get("detailed_responses", []):
+        response_id = str(item["response_id"])
+
+        responses.setdefault(
+            response_id,
+            {
+                "text": item["response"],
+                "sentiment": None,
+                "evidence_rich": False,
+                "labels": [],
+                "processable": True,
+            },
+        )
+
+        responses[response_id]["evidence_rich"] = (
+            str(item.get("evidence_rich", "")).upper() == "YES"
+        )
+
+    # Unprocessables
+    for item in data.get("unprocessables", []):
+        response_id = str(item["response_id"])
+
+        responses.setdefault(
+            response_id,
+            {
+                "text": item["response"],
+                "sentiment": None,
+                "evidence_rich": False,
+                "labels": [],
+                "processable": False,
+            },
+        )
+
+        responses[response_id]["processable"] = False
+
+    return {
+        "question": data.get("question"),
+        "responses": responses,
+        "themes": themes,
+    }
