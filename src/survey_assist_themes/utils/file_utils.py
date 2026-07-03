@@ -505,9 +505,8 @@ def build_theme_table_df(result: dict[str, Any], id_mapping_df: pd.DataFrame) ->
             theme = themes.get(topic_id)
             if theme is None:
                 logger.warning(
-                    "Skipping response_id=%s because topic_id=%s was not found in themes",
-                    response_id,
-                    topic_id,
+                    f"Skipping response_id={response_id} "
+                    f"because topic_id={topic_id} was not found in themes"
                 )
                 continue
 
