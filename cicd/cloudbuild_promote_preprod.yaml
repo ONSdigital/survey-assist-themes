@@ -14,9 +14,12 @@ steps:
         echo === Pulling image dev image with tag $SHORT_SHA ===
         docker pull $$THEMES_IMAGE_DEV:$SHORT_SHA
 
-        echo === Build Docker image, tag and push to GAR ===
+        echo === Tag image and push to releases GAR ===
         docker tag $$THEMES_IMAGE_DEV:$SHORT_SHA $$THEMES_IMAGE_RELEASES:$TAG_NAME
+        docker tag $$THEMES_IMAGE_DEV:$SHORT_SHA $$THEMES_IMAGE_RELEASES:latest
         docker push $$THEMES_IMAGE_RELEASES:$TAG_NAME
+        docker push $$THEMES_IMAGE_RELEASES:latest
+        
 
     id: Tag and push release image
     entrypoint: bash

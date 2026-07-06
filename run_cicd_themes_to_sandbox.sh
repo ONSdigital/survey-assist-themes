@@ -16,7 +16,7 @@ sandbox_config=$(gcloud parametermanager parameters versions describe $ENV_NAME 
 PROJECT_ID=$(echo $sandbox_config | python3 -c "import sys, json; print(json.load(sys.stdin)['project-id'])")
 CICD_SA=$(echo $sandbox_config | python3 -c "import sys, json; print(json.load(sys.stdin)['cicd-sa-email'])")
 REGION=$(echo $sandbox_config | python3 -c "import sys, json; print(json.load(sys.stdin)['region'])")
-CB_BUCKET=gs://${PROJECT_ID}_cloudbuild/soc-api
+CB_BUCKET=gs://${PROJECT_ID}_cloudbuild/themes-job
 
 gcloud beta builds submit . --config=cicd/cloudbuild_dev_and_sandbox.yaml \
 	--project $CICD_PROJECT_ID \
